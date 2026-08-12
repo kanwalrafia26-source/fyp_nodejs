@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
 import 'session_report_screen.dart';
 import '../../core/app_nav.dart';
+import '../../services/api_service.dart';
 
 class SessionActiveScreen extends StatefulWidget {
   final int selectedAI; // 0=Coach, 1=Therapist, 2=Both
@@ -24,6 +27,12 @@ class _SessionActiveScreenState extends State<SessionActiveScreen>
 
   // Active AI tab
   int _activeAI = 0; // 0=Coach, 1=Therapist
+
+  // ── Real audio pipeline (Modules 1–3) ───────────────────────────────────
+  final AudioRecorder _recorder = AudioRecorder();
+  String? _filePath;
+  bool _isRecordingReal = false;
+  bool _isAnalyzing = false;
 
   // ── Colours ──────────────────────────────────────────────────────────────
   static const Color kBg         = Color(0xFF1A0535);
@@ -52,12 +61,39 @@ class _SessionActiveScreenState extends State<SessionActiveScreen>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     )..repeat(reverse: true);
+
+    _startRealRecording();
+  }
+
+  /// Starts actually recording audio in the background. If mic permission
+  /// isn't available, we silently skip real recording — the session still
+  /// runs visually (timer, waveform) and the report screen will fall back
+  /// to placeholder numbers instead of failing the whole session.
+  Future<void> _startRealRecording() async {
+    try {
+      final hasPermission = await _recorder.hasPermission();
+      if (!hasPermission) return;
+
+      final dir = await getApplicationDocumentsDirectory();
+      final path =
+          '${dir.path}/speakora_session_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await _recorder.start(const RecordConfig(), path: path);
+      _filePath = path;
+      _isRecordingReal = true;
+    } catch (_) {
+      // Recording is a nice-to-have here, not a hard requirement — fail quiet.
+      _isRecordingReal = false;
+    }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
     _waveCtrl.dispose();
+    if (_isRecordingReal) {
+      _recorder.stop();
+    }
+    _recorder.dispose();
     super.dispose();
   }
 
@@ -69,180 +105,237 @@ class _SessionActiveScreenState extends State<SessionActiveScreen>
 
   int _navIndex = 1; // Quest is active by default on this screen
 
+  Future<void> _handleStop() async {
+    setState(() => _running = false);
+    _timer?.cancel();
+    _waveCtrl.stop();
+
+    Map<String, dynamic>? analysis;
+
+    if (_isRecordingReal && _filePath != null) {
+      try {
+        final path = await _recorder.stop();
+        if (path != null && mounted) {
+          setState(() => _isAnalyzing = true);
+          analysis = await ApiService.transcribeAudio(path);
+        }
+      } catch (_) {
+        // Analysis failed — report screen will just use placeholder data.
+        analysis = null;
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => _isAnalyzing = false);
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SessionReportScreen(
+          selectedAI: widget.selectedAI,
+          realTranscript: analysis?['transcript'] as String?,
+          realFluencyScore: analysis?['fluencyScore'] as int?,
+          realFillerWordCount: analysis?['fillerWordCount'] as int?,
+          realLongPauseCount: analysis?['longPauseCount'] as int?,
+          realWpm: analysis?['wpm'] as int?,
+          realPaceStability: analysis?['paceStability'] as String?,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kBg,
       bottomNavigationBar: _buildBottomNav(),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Timer row ───────────────────────────────────────────
-              Row(
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Column(
+                  // ── Timer row ───────────────────────────────────────────
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'In progress',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.white.withOpacity(0.55),
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'In progress',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.white.withOpacity(0.55),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          AnimatedBuilder(
+                            animation: _waveCtrl,
+                            builder: (_, __) => Text(
+                              _timeLabel,
+                              style: const TextStyle(
+                                fontSize: 42,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                                height: 1.0,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
-                      AnimatedBuilder(
-                        animation: _waveCtrl,
-                        builder: (_, __) => Text(
-                          _timeLabel,
-                          style: const TextStyle(
-                            fontSize: 42,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                            height: 1.0,
+                      const Spacer(),
+                      // Stop button
+                      GestureDetector(
+                        onTap: _isAnalyzing ? null : _handleStop,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 22, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: kStopBg,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Text(
+                            'Stop',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: kStopText,
+                            ),
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const Spacer(),
-                  // Stop button
-                  GestureDetector(
-                    onTap: () {
-                    setState(() => _running = false);
-                    _timer?.cancel();
-                    _waveCtrl.stop();
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => SessionReportScreen(
-                                selectedAI: widget.selectedAI,
-                              )),
-                    );
-                  },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 22, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: kStopBg,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: const Text(
-                        'Stop',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: kStopText,
+
+                  const SizedBox(height: 24),
+
+                  // ── AI avatars (show based on selection) ────────────────
+                  Row(
+                    children: [
+                      if (widget.selectedAI == 0 || widget.selectedAI == 2) ...[
+                        _AIAvatar(
+                          icon: Icons.person_rounded,
+                          label: 'Coach',
+                          active: _activeAI == 0,
+                          onTap: () => setState(() => _activeAI = 0),
+                        ),
+                        if (widget.selectedAI == 2) const SizedBox(width: 20),
+                      ],
+                      if (widget.selectedAI == 1 || widget.selectedAI == 2)
+                        _AIAvatar(
+                          icon: Icons.psychology_rounded,
+                          label: 'Therapist',
+                          active: _activeAI == 1,
+                          onTap: () => setState(() => _activeAI = 1),
+                        ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // ── Waveform ────────────────────────────────────────────
+                  Center(
+                    child: AnimatedBuilder(
+                      animation: _waveCtrl,
+                      builder: (_, __) => CustomPaint(
+                        size: const Size(260, 56),
+                        painter: _WaveformPainter(
+                          progress: _waveCtrl.value,
+                          color: kYellow,
                         ),
                       ),
                     ),
                   ),
+
+                  const SizedBox(height: 20),
+
+                  // ── Metrics card ────────────────────────────────────────
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 18),
+                    decoration: BoxDecoration(
+                      color: kCardBg,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Column(
+                      children: [
+                        _MetricRow(
+                          label: 'Speed',
+                          value: 'Fast ↑',
+                          valueColor: kFast,
+                        ),
+                        const _Divider(),
+                        _MetricRow(
+                          label: 'Emotion',
+                          value: 'Nervous',
+                          valueColor: kNervous,
+                          dot: true,
+                        ),
+                        const _Divider(),
+                        _MetricRow(
+                          label: 'Volume',
+                          value: 'Good',
+                          valueColor: kGood,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // ── AI tip card ─────────────────────────────────────────
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 18),
+                    decoration: BoxDecoration(
+                      color: kCardBg,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      _isRecordingReal
+                          ? '"Speak naturally — this is being analyzed by the real pipeline."'
+                          : '"Slow down a little — you\'re rushing."',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontStyle: FontStyle.italic,
+                        color: Colors.white.withOpacity(0.85),
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
                 ],
               ),
+            ),
 
-              const SizedBox(height: 24),
-
-              // ── AI avatars (show based on selection) ────────────────
-              Row(
-                children: [
-                  if (widget.selectedAI == 0 || widget.selectedAI == 2) ...[
-                    _AIAvatar(
-                      icon: Icons.person_rounded,
-                      label: 'Coach',
-                      active: _activeAI == 0,
-                      onTap: () => setState(() => _activeAI = 0),
-                    ),
-                    if (widget.selectedAI == 2) const SizedBox(width: 20),
-                  ],
-                  if (widget.selectedAI == 1 || widget.selectedAI == 2)
-                    _AIAvatar(
-                      icon: Icons.psychology_rounded,
-                      label: 'Therapist',
-                      active: _activeAI == 1,
-                      onTap: () => setState(() => _activeAI = 1),
-                    ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // ── Waveform ────────────────────────────────────────────
-              Center(
-                child: AnimatedBuilder(
-                  animation: _waveCtrl,
-                  builder: (_, __) => CustomPaint(
-                    size: const Size(260, 56),
-                    painter: _WaveformPainter(
-                      progress: _waveCtrl.value,
-                      color: kYellow,
-                    ),
+            // ── Analyzing overlay ─────────────────────────────────────────
+            if (_isAnalyzing)
+              Container(
+                color: Colors.black.withOpacity(0.6),
+                child: const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(color: kYellow),
+                      SizedBox(height: 16),
+                      Text(
+                        'Analyzing your speech...',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-
-              const SizedBox(height: 20),
-
-              // ── Metrics card ────────────────────────────────────────
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 20, vertical: 18),
-                decoration: BoxDecoration(
-                  color: kCardBg,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Column(
-                  children: [
-                    _MetricRow(
-                      label: 'Speed',
-                      value: 'Fast ↑',
-                      valueColor: kFast,
-                    ),
-                    const _Divider(),
-                    _MetricRow(
-                      label: 'Emotion',
-                      value: 'Nervous',
-                      valueColor: kNervous,
-                      dot: true,
-                    ),
-                    const _Divider(),
-                    _MetricRow(
-                      label: 'Volume',
-                      value: 'Good',
-                      valueColor: kGood,
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
-              // ── AI tip card ─────────────────────────────────────────
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 20, vertical: 18),
-                decoration: BoxDecoration(
-                  color: kCardBg,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '"Slow down a little — you\'re rushing."',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontStyle: FontStyle.italic,
-                    color: Colors.white.withOpacity(0.85),
-                    height: 1.5,
-                  ),
-                ),
-              ),
-            ],
-          ),
+          ],
         ),
       ),
     );

@@ -5,6 +5,7 @@ import '../games/speakquest_screen.dart';
 import '../progress/progress_screen.dart';
 import '../../core/app_nav.dart';
 import '../../core/auth_service.dart';
+import '../details/audio_test_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -163,6 +164,28 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                         ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // ── DEBUG: Audio test ───────────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.push(context,
+                          MaterialPageRoute(
+                              builder: (_) => const AudioTestScreen())),
+                      icon: const Icon(Icons.mic_rounded),
+                      label: const Text('🧪 Audio Pipeline Test'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF5300AC),
+                        side: const BorderSide(color: Color(0xFF5300AC)),
+                        minimumSize: const Size(double.infinity, 48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
                   ),

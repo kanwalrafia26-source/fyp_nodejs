@@ -8,7 +8,29 @@ import '../details/voice_analysis_screen.dart';
 
 class SessionReportScreen extends StatefulWidget {
   final int selectedAI; // 0=Coach, 1=Therapist, 2=Both
-  const SessionReportScreen({super.key, this.selectedAI = 2});
+
+  // Real data from Modules 1–3 (Audio, Speech-to-Text, Fluency Analysis).
+  // Null when recording/analysis wasn't available — screen falls back to
+  // placeholder numbers in that case instead of breaking.
+  final String? realTranscript;
+  final int? realFluencyScore;
+  final int? realFillerWordCount;
+  final int? realLongPauseCount;
+  final int? realWpm;
+  final String? realPaceStability;
+
+  const SessionReportScreen({
+    super.key,
+    this.selectedAI = 2,
+    this.realTranscript,
+    this.realFluencyScore,
+    this.realFillerWordCount,
+    this.realLongPauseCount,
+    this.realWpm,
+    this.realPaceStability,
+  });
+
+  bool get hasRealData => realFluencyScore != null;
 
   @override
   State<SessionReportScreen> createState() => _SessionReportScreenState();
@@ -34,6 +56,9 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
   static const Color kBarYellow = Color(0xFFD9E366);
   static const Color kBarOrange = Color(0xFFFFA060);
   static const Color kNavBg     = Color(0xFFE6C6F7);
+  static const Color kGreen     = Color(0xFF2D7A40);
+
+  int get _overallScore => widget.realFluencyScore ?? 74;
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +69,61 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
           children: [
             // ── Header ──────────────────────────────────────────────────
             _buildHeader(),
+
+            // ── Live transcript preview (only if we have real data) ──────
+            if (widget.hasRealData && widget.realTranscript != null) ...[
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: kCardBg,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: kCardBdr, width: 1),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              color: kGreen,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'LIVE TRANSCRIPT',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: kSubtitle,
+                              letterSpacing: 1.0,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        widget.realTranscript!.isNotEmpty
+                            ? widget.realTranscript!
+                            : '(no speech detected)',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: kHeader,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
 
             const SizedBox(height: 20),
 
@@ -114,8 +194,8 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
+                  children: [
+                    const Text(
                       'AI says',
                       style: TextStyle(
                         fontSize: 17,
@@ -124,10 +204,10 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
                         letterSpacing: -0.68,
                       ),
                     ),
-                    SizedBox(height: 4),
+                    const SizedBox(height: 4),
                     Text(
-                      '"4 min non-stop, thats real growth!',
-                      style: TextStyle(
+                      _aiSaysMessage(),
+                      style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w300,
                         color: kHeader,
@@ -212,6 +292,35 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
         ),
       ),
     );
+  }
+
+  String _aiSaysMessage() {
+    if (!widget.hasRealData) {
+      return '"4 min non-stop, that\'s real growth!';
+    }
+    final score   = widget.realFluencyScore!;
+    final fillers = widget.realFillerWordCount ?? 0;
+    final pauses  = widget.realLongPauseCount ?? 0;
+    final wpm     = widget.realWpm ?? 0;
+    final pace    = widget.realPaceStability ?? 'Stable';
+
+    if (score >= 70) {
+      final fillerText = fillers == 0 ? 'no filler words' : '$fillers filler word${fillers > 1 ? "s" : ""}';
+      return '"Strong fluency — $fillerText detected and your pace was $pace.';
+    } else if (score >= 45) {
+      final issues = <String>[];
+      if (pauses > 0) issues.add('$pauses long pause${pauses > 1 ? 's' : ''}');
+      if (fillers > 0) issues.add('$fillers filler word${fillers > 1 ? 's' : ''}');
+      if (pace == 'Uneven') issues.add('uneven pacing');
+      final issueText = issues.isNotEmpty ? issues.join(', ') : 'a few breaks in flow';
+      return '"Decent session — $issueText held the score back. Keep going.';
+    }
+    final issues = <String>[];
+    if (pauses > 1) issues.add('$pauses long pauses');
+    if (fillers > 1) issues.add('$fillers filler words');
+    if (wpm < 80 && wpm > 0) issues.add('slow pace ($wpm WPM)');
+    final issueText = issues.isNotEmpty ? issues.join(', ') : 'too many breaks';
+    return '"Needs work — $issueText. Try pausing on purpose instead of filling silence.';
   }
 
   // ── Expandable card wrapper ────────────────────────────────────────────────
@@ -320,21 +429,54 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
 
   // ── Coach content ──────────────────────────────────────────────────────────
   Widget _buildCoachContent() {
+    // Real data (Module 3) covers Fluency, Filler words, and Pacing.
+    // Pronunciation still needs Module 2's phoneme-mismatch work we haven't
+    // built yet, so it stays as a labeled placeholder for now.
+    final fluencyScore = widget.realFluencyScore;
+    final fillerCount = widget.realFillerWordCount;
+    final paceStability = widget.realPaceStability;
+
     return Column(
       children: [
-        _BarMetric(label: 'Pronounciation', value: '80%', fill: 0.81, color: kBarPurple),
+        _BarMetric(
+          label: 'Pronounciation',
+          value: '80%',
+          fill: 0.81,
+          color: kBarPurple,
+        ),
         const SizedBox(height: 10),
-        _BarMetric(label: 'Fluency',        value: '68%', fill: 0.66, color: kBarPurple),
+        _BarMetric(
+          label: 'Fluency',
+          value: fluencyScore != null ? '$fluencyScore%' : '68%',
+          fill: (fluencyScore ?? 66) / 100,
+          color: kBarPurple,
+        ),
         const SizedBox(height: 10),
-        _BarMetric(label: 'Pacing',         value: '80%', fill: 0.80, color: kBarPurple),
+        _BarMetric(
+          label: 'Pacing',
+          value: paceStability ?? '80%',
+          fill: paceStability != null
+              ? (paceStability == 'Stable' ? 0.85 : 0.45)
+              : 0.80,
+          color: kBarPurple,
+        ),
         const SizedBox(height: 10),
-        _BarMetric(label: 'Filler words',   value: '68%', fill: 0.66, color: kBarPurple),
+        _BarMetric(
+          label: 'Filler words',
+          value: fillerCount != null ? '$fillerCount words' : '68%',
+          fill: fillerCount != null
+              ? (1 - min(fillerCount, 10) / 10).clamp(0.0, 1.0)
+              : 0.66,
+          color: kBarPurple,
+        ),
       ],
     );
   }
 
   // ── Therapist content ──────────────────────────────────────────────────────
   Widget _buildTherapistContent() {
+    // Emotion/anxiety detection is Module 4 — not built yet, so this stays
+    // as placeholder data regardless of whether we have real fluency data.
     return Column(
       children: [
         _DotMetric(label: 'Anxiety',            value: 'Mild',  dotColor: kOrange),
@@ -354,15 +496,30 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
 
   // ── Voice analysis content ─────────────────────────────────────────────────
   Widget _buildVoiceContent() {
+    final wpm = widget.realWpm;
+    final longPauses = widget.realLongPauseCount;
+
     return Column(
       children: [
         _BarMetric(label: 'Pitch',        value: '80%', fill: 0.80, color: kBarPurple),
         const SizedBox(height: 8),
-        _BarMetric(label: 'Speed',        value: '80%', fill: 0.80, color: kBarYellow),
+        _BarMetric(
+          label: 'Speed',
+          value: wpm != null ? '$wpm WPM' : '80%',
+          fill: wpm != null ? (wpm / 180).clamp(0.0, 1.0) : 0.80,
+          color: kBarYellow,
+        ),
         const SizedBox(height: 8),
         _BarMetric(label: 'Volume',       value: '80%', fill: 0.80, color: kBarPurple),
         const SizedBox(height: 8),
-        _BarMetric(label: 'Pauses',       value: '80%', fill: 0.80, color: kBarOrange),
+        _BarMetric(
+          label: 'Pauses',
+          value: longPauses != null ? '$longPauses long' : '80%',
+          fill: longPauses != null
+              ? (1 - min(longPauses, 8) / 8).clamp(0.0, 1.0)
+              : 0.80,
+          color: kBarOrange,
+        ),
         const SizedBox(height: 8),
         _BarMetricSub(label: 'Tone', sub: 'Jitter',   value: '80%', fill: 0.80, color: kBarOrange),
         const SizedBox(height: 8),
@@ -399,14 +556,14 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
                 width: 96,
                 height: 96,
                 child: CustomPaint(
-                  painter: _ScoreRingPainter(score: 74),
+                  painter: _ScoreRingPainter(score: _overallScore),
                   child: Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text(
-                          '74',
-                          style: TextStyle(
+                        Text(
+                          '$_overallScore',
+                          style: const TextStyle(
                             fontSize: 25,
                             fontWeight: FontWeight.w800,
                             color: Colors.white,
@@ -446,9 +603,11 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
                       color: kYellow,
                       borderRadius: BorderRadius.circular(60),
                     ),
-                    child: const Text(
-                      '+6 vs last session',
-                      style: TextStyle(
+                    child: Text(
+                      widget.hasRealData
+                          ? 'Live pipeline result'
+                          : '+6 vs last session',
+                      style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: Color(0xFF4C5414),

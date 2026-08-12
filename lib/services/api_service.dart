@@ -183,4 +183,32 @@ class ApiService {
 
   /// Restores token from saved session.
   static void restoreToken(String token) => _token = token;
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // TRANSCRIBE AUDIO  →  POST /api/analyze/transcribe
+  // ════════════════════════════════════════════════════════════════════════════
+  /// Uploads an audio file to the local Whisper backend.
+  /// Returns { transcript, durationSeconds, wordCount, wpm } on success.
+  /// Throws an Exception with a readable message on failure.
+  static Future<Map<String, dynamic>> transcribeAudio(String filePath) async {
+    try {
+      final uri = Uri.parse('$baseUrl/analyze/transcribe');
+      final request = http.MultipartRequest('POST', uri);
+      request.files.add(await http.MultipartFile.fromPath('audio', filePath));
+      if (_token != null) {
+        request.headers['Authorization'] = 'Bearer $_token';
+      }
+
+      final streamed = await request.send();
+      final res = await http.Response.fromStream(streamed);
+
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body) as Map<String, dynamic>;
+      }
+      throw Exception(_errorFrom(res));
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Network error. Is the server running?');
+    }
+  }
 }

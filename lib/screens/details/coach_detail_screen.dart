@@ -1,7 +1,28 @@
 import 'package:flutter/material.dart';
 
 class CoachDetailScreen extends StatelessWidget {
-  const CoachDetailScreen({super.key});
+  // Real data from Modules 2/3 — null falls back to the original example
+  // content so the screen never looks broken if analysis wasn't available.
+  final int? realFluencyScore;
+  final int? realPronunciationScore;
+  final int? realFillerWordCount;
+  final int? realLongPauseCount;
+  final String? realPaceStability;
+  final Map<String, int>? realFillerBreakdown;
+  final List<String>? realLowConfidenceWords;
+
+  const CoachDetailScreen({
+    super.key,
+    this.realFluencyScore,
+    this.realPronunciationScore,
+    this.realFillerWordCount,
+    this.realLongPauseCount,
+    this.realPaceStability,
+    this.realFillerBreakdown,
+    this.realLowConfidenceWords,
+  });
+
+  bool get hasRealData => realFluencyScore != null;
 
   static const Color kBg       = Color(0xFFFFFFFF);
   static const Color kHeader   = Color(0xFF1C0E4E);
@@ -41,21 +62,27 @@ class CoachDetailScreen extends StatelessWidget {
             // ── Pronunciation ────────────────────────────────────────
             _buildSkillBlock(
               title: 'Pronunciation',
-              score: '80%',
+              score: realPronunciationScore != null
+                  ? '$realPronunciationScore%'
+                  : '80%',
               scoreColor: kPrimary,
-              fill: 0.80,
+              fill: (realPronunciationScore ?? 80) / 100,
               barColor: kPrimary,
-              subLabel: '3 WORDS MISPRONOUNCED',
-              child: _buildMispronounced(),
+              subLabel: hasRealData
+                  ? (realLowConfidenceWords?.isNotEmpty == true
+                      ? '${realLowConfidenceWords!.length} WORDS UNCLEAR'
+                      : 'ALL WORDS CLEAR')
+                  : '3 WORDS MISPRONOUNCED',
+              child: _buildPronunciationDetail(),
             ),
 
             // ── Fluency ──────────────────────────────────────────────
             _buildSkillBlock(
               title: 'Fluency',
-              score: '68%',
-              scoreColor: kOrange,
-              fill: 0.68,
-              barColor: kOrange,
+              score: realFluencyScore != null ? '$realFluencyScore%' : '68%',
+              scoreColor: (realFluencyScore ?? 68) >= 70 ? kGreen : kOrange,
+              fill: (realFluencyScore ?? 68) / 100,
+              barColor: (realFluencyScore ?? 68) >= 70 ? kGreen : kOrange,
               subLabel: 'WHAT BROKE YOUR FLUENCY',
               child: _buildFluency(),
             ),
@@ -63,8 +90,8 @@ class CoachDetailScreen extends StatelessWidget {
             // ── Pacing ───────────────────────────────────────────────
             _buildSkillBlock(
               title: 'Pacing',
-              score: 'Fast',
-              scoreColor: kOrange,
+              score: realPaceStability ?? 'Fast',
+              scoreColor: realPaceStability == 'Uneven' ? kOrange : kGreen,
               fill: null,
               barColor: kOrange,
               subLabel: 'SPEED ACROSS YOUR SESSION',
@@ -74,22 +101,28 @@ class CoachDetailScreen extends StatelessWidget {
             // ── Filler words ─────────────────────────────────────────
             _buildSkillBlock(
               title: 'Filler words',
-              score: '9 words',
-              scoreColor: kRed,
-              fill: 0.45,
+              score: realFillerWordCount != null
+                  ? '$realFillerWordCount words'
+                  : '9 words',
+              scoreColor: (realFillerWordCount ?? 9) >= 5 ? kRed : kGreen,
+              fill: realFillerWordCount != null
+                  ? (1 - (realFillerWordCount! / 15)).clamp(0.0, 1.0)
+                  : 0.45,
               barColor: kRed,
               subLabel: 'WORDS DETECTED',
               child: _buildFillerWords(),
             ),
 
-            // ── Clarity ──────────────────────────────────────────────
+            // ── Clarity — not yet built, honestly labeled ─────────────
             _buildSkillBlock(
               title: 'Clarity',
               score: '75%',
               scoreColor: kPrimary,
               fill: 0.75,
               barColor: kPrimary,
-              subLabel: 'WHAT AFFECTED CLARITY',
+              subLabel: hasRealData
+                  ? 'PREVIEW DATA — VOLUME ANALYSIS COMING SOON'
+                  : 'WHAT AFFECTED CLARITY',
               child: _buildClarity(),
             ),
 
@@ -109,7 +142,6 @@ class CoachDetailScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Back button row
             Row(
               children: [
                 GestureDetector(
@@ -140,10 +172,8 @@ class CoachDetailScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            // Score + greeting row
             Row(
               children: [
-                // Score ring
                 SizedBox(
                   width: 56,
                   height: 56,
@@ -167,16 +197,20 @@ class CoachDetailScreen extends StatelessWidget {
                           border: Border.all(color: kYellow, width: 3),
                         ),
                       ),
-                      const Column(
+                      Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('74',
-                              style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                  height: 1.0)),
-                          Text('/100',
+                          Text(
+                            realFluencyScore != null
+                                ? '$realFluencyScore'
+                                : '74',
+                            style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                                height: 1.0),
+                          ),
+                          const Text('/100',
                               style: TextStyle(
                                   fontSize: 8,
                                   color: Color(0xFFB9A8E8))),
@@ -210,11 +244,13 @@ class CoachDetailScreen extends StatelessWidget {
                           color: kYellow,
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        child: const Text('+6 from last time',
-                            style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: kYellowDk)),
+                        child: Text(
+                          hasRealData ? 'Live pipeline result' : '+6 from last time',
+                          style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: kYellowDk),
+                        ),
                       ),
                     ],
                   ),
@@ -369,7 +405,47 @@ class CoachDetailScreen extends StatelessWidget {
     );
   }
 
-  // ── Mispronounced words ────────────────────────────────────────────────────
+  // ── Pronunciation detail ───────────────────────────────────────────────────
+  Widget _buildPronunciationDetail() {
+    if (hasRealData) {
+      final unclear = realLowConfidenceWords ?? [];
+      if (unclear.isEmpty) {
+        return const Text(
+          'Every word came through clearly — no low-confidence words detected by the transcription model.',
+          style: TextStyle(fontSize: 12, color: Color(0xFF666666), height: 1.5),
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'These words had lower transcription confidence — often a sign of unclear articulation:',
+            style: TextStyle(fontSize: 11, color: Color(0xFF888888), height: 1.4),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: unclear.map((w) => Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: kTagBg,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '"$w"',
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w700, color: kRed),
+                  ),
+                )).toList(),
+          ),
+        ],
+      );
+    }
+    return _buildMispronounced();
+  }
+
+  // ── Mispronounced words (fallback example data) ────────────────────────────
   Widget _buildMispronounced() {
     final words = [
       ('"Anxiety"', '... ang-ZY-uh-tee', 'x3 times'),
@@ -417,6 +493,40 @@ class CoachDetailScreen extends StatelessWidget {
 
   // ── Fluency breakdown ──────────────────────────────────────────────────────
   Widget _buildFluency() {
+    if (hasRealData) {
+      final pauses = realLongPauseCount ?? 0;
+      final fillers = realFillerWordCount ?? 0;
+      final rows = [
+        ('Long pauses', pauses > 0 ? '$pauses detected' : 'None detected ✓',
+            pauses > 0 ? kRed : kGreen),
+        ('Filler words', fillers > 0 ? '$fillers words' : 'None detected ✓',
+            fillers > 0 ? kRed : kGreen),
+      ];
+      return Column(
+        children: rows.map((r) => Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(r.$1,
+                      style: const TextStyle(
+                          fontSize: 12, color: Color(0xFF444444))),
+                  Text(r.$2,
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: r.$3)),
+                ],
+              ),
+            ),
+            Container(height: 1, color: kDivider),
+          ],
+        )).toList(),
+      );
+    }
+
     final rows = [
       ('Long pauses', '8 detected', kRed),
       ('Filler words', '9 words', kRed),
@@ -448,8 +558,30 @@ class CoachDetailScreen extends StatelessWidget {
     );
   }
 
-  // ── Pacing timeline ────────────────────────────────────────────────────────
+  // ── Pacing ──────────────────────────────────────────────────────────────────
   Widget _buildPacing() {
+    if (hasRealData) {
+      final stable = realPaceStability != 'Uneven';
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: stable ? const Color(0xFFF0FDF6) : const Color(0xFFFFF8F0),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          stable
+              ? 'Your pace stayed fairly consistent across the whole recording — no major speed swings detected.'
+              : 'Your pace changed noticeably between the start and end of the recording — try to keep a steadier rhythm throughout.',
+          style: TextStyle(
+              fontSize: 12,
+              color: stable ? kGreen : kOrange,
+              fontWeight: FontWeight.w600,
+              height: 1.5),
+        ),
+      );
+    }
+
     final rows = [
       ('0:00', 0.78, kRed, 'Fast'),
       ('1:00', 0.78, kRed, 'Fast'),
@@ -493,6 +625,57 @@ class CoachDetailScreen extends StatelessWidget {
 
   // ── Filler word chips ──────────────────────────────────────────────────────
   Widget _buildFillerWords() {
+    if (hasRealData) {
+      final breakdown = realFillerBreakdown ?? {};
+      if (breakdown.isEmpty) {
+        return const Text(
+          '💡 No filler words detected — clean, confident delivery.',
+          style: TextStyle(fontSize: 12, color: Color(0xFF3BAA6A), fontWeight: FontWeight.w600),
+        );
+      }
+      final sorted = breakdown.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: sorted.map((e) => Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: kHeader,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text('"${e.key}"',
+                      style: const TextStyle(fontSize: 12, color: Colors.white)),
+                ),
+                const SizedBox(width: 2),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: e.value >= 3 ? kRed : kOrange,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(e.value.toString().padLeft(2, '0'),
+                      style: const TextStyle(
+                          fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white)),
+                ),
+              ],
+            )).toList(),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            '💡 Next time — pause silently instead of using a filler word',
+            style: TextStyle(fontSize: 11, color: Color(0xFF888888)),
+          ),
+        ],
+      );
+    }
+
     final chips = [
       ('"um"', '09', kRed),
       ('"uh"', '05', kOrange),
@@ -545,7 +728,7 @@ class CoachDetailScreen extends StatelessWidget {
     );
   }
 
-  // ── Clarity breakdown ──────────────────────────────────────────────────────
+  // ── Clarity breakdown (not yet built — example data, honestly labeled) ─────
   Widget _buildClarity() {
     final rows = [
       ('Volume drop moments', '4 times', kRed),

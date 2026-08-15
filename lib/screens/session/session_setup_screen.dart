@@ -11,7 +11,10 @@ class SessionSetupScreen extends StatefulWidget {
 
 class _SessionSetupScreenState extends State<SessionSetupScreen> {
   int _selectedAI = 0;       // 0=Coach, 1=Therapist, 2=Both
-  int _selectedFeedback = 0; // 0=Live, 1=After, 2=Both
+  // 0=Live, 1=After, 2=Both — defaults to After since that's the mode
+  // that's actually implemented right now (record → analyze → report).
+  // Live streaming feedback isn't built yet, marked below.
+  int _selectedFeedback = 1;
 
   // ── Colours ──────────────────────────────────────────────────────────────
   static const Color kBg          = Color(0xFFEFE8F8);
@@ -25,6 +28,12 @@ class _SessionSetupScreenState extends State<SessionSetupScreen> {
   static const Color kSubtitle    = Color(0xFF9B7EC8);
   static const Color kLabel       = Color(0xFF9B7EC8);
   static const Color kBtnBg       = Color(0xFFD4A8F0);
+
+  void _showComingSoon(String feature) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$feature is coming soon — using After (report) mode for now.')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -307,13 +316,18 @@ class _SessionSetupScreenState extends State<SessionSetupScreen> {
               const SizedBox(height: 10),
 
               // ── Feedback toggle row ─────────────────────────────────
+              // Only "After" is real right now (record → analyze → report).
+              // Live and Both are marked "Soon" rather than silently doing
+              // nothing when tapped — see session_active/report_screen for
+              // the actual implemented pipeline.
               Row(
                 children: [
                   _FeedbackTab(
                     label: 'Live',
                     sublabel: 'During',
                     selected: _selectedFeedback == 0,
-                    onTap: () => setState(() => _selectedFeedback = 0),
+                    locked: true,
+                    onTap: () => _showComingSoon('Live feedback'),
                   ),
                   const SizedBox(width: 10),
                   _FeedbackTab(
@@ -327,7 +341,8 @@ class _SessionSetupScreenState extends State<SessionSetupScreen> {
                     label: 'Both',
                     sublabel: 'All',
                     selected: _selectedFeedback == 2,
-                    onTap: () => setState(() => _selectedFeedback = 2),
+                    locked: true,
+                    onTap: () => _showComingSoon('Combined live + report feedback'),
                   ),
                 ],
               ),
@@ -477,6 +492,7 @@ class _FeedbackTab extends StatelessWidget {
   final String sublabel;
   final bool selected;
   final VoidCallback onTap;
+  final bool locked;
 
   static const Color kCardDark  = Color(0xFF1E0840);
   static const Color kCardWhite = Color(0xFFFFFFFF);
@@ -486,6 +502,7 @@ class _FeedbackTab extends StatelessWidget {
     required this.sublabel,
     required this.selected,
     required this.onTap,
+    this.locked = false,
   });
 
   @override
@@ -493,33 +510,49 @@ class _FeedbackTab extends StatelessWidget {
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: selected ? kCardDark : kCardWhite,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: selected ? Colors.white : Colors.black87,
+        child: Opacity(
+          opacity: locked ? 0.55 : 1.0,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              color: selected ? kCardDark : kCardWhite,
+              borderRadius: BorderRadius.circular(16),
+              border: locked
+                  ? Border.all(color: Colors.black12, width: 1)
+                  : null,
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: selected ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    if (locked) ...[
+                      const SizedBox(width: 4),
+                      const Icon(Icons.lock_outline_rounded,
+                          size: 12, color: Colors.black45),
+                    ],
+                  ],
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                sublabel,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: selected
-                      ? const Color(0xFFC097D8)
-                      : Colors.black45,
+                const SizedBox(height: 2),
+                Text(
+                  locked ? 'Soon' : sublabel,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: selected
+                        ? const Color(0xFFC097D8)
+                        : Colors.black45,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

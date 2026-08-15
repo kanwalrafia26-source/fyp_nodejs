@@ -178,29 +178,20 @@ class ApiService {
     }
   }
 
-  /// Clears token on logout.
-  static void clearToken() => _token = null;
-
-  /// Restores token from saved session.
-  static void restoreToken(String token) => _token = token;
-
   // ════════════════════════════════════════════════════════════════════════════
   // TRANSCRIBE AUDIO  →  POST /api/analyze/transcribe
   // ════════════════════════════════════════════════════════════════════════════
-  /// Uploads an audio file to the local Whisper backend.
-  /// Returns { transcript, durationSeconds, wordCount, wpm } on success.
-  /// Throws an Exception with a readable message on failure.
+  /// Uploads a recorded audio file for local Whisper transcription.
+  /// Returns a map like { transcript, durationSeconds, wordCount, wpm }
+  /// on success, or throws an Exception with a readable message on failure.
   static Future<Map<String, dynamic>> transcribeAudio(String filePath) async {
-    try {
-      final uri = Uri.parse('$baseUrl/analyze/transcribe');
-      final request = http.MultipartRequest('POST', uri);
-      request.files.add(await http.MultipartFile.fromPath('audio', filePath));
-      if (_token != null) {
-        request.headers['Authorization'] = 'Bearer $_token';
-      }
+    final uri = Uri.parse('$baseUrl/analyze/transcribe');
+    final request = http.MultipartRequest('POST', uri);
+    request.files.add(await http.MultipartFile.fromPath('audio', filePath));
 
-      final streamed = await request.send();
-      final res = await http.Response.fromStream(streamed);
+    try {
+      final streamedRes = await request.send();
+      final res = await http.Response.fromStream(streamedRes);
 
       if (res.statusCode == 200) {
         return jsonDecode(res.body) as Map<String, dynamic>;
@@ -210,5 +201,42 @@ class ApiService {
       if (e is Exception) rethrow;
       throw Exception('Network error. Is the server running?');
     }
+  }
+
+  /// Clears token on logout.
+  static void clearToken() => _token = null;
+
+  /// Restores token from saved session.
+  static void restoreToken(String token) => _token = token;
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // SAVE SESSION  →  POST /api/sessions
+  // ════════════════════════════════════════════════════════════════════════════
+  /// Returns null on success, error string on failure.
+  static Future<String?> saveSession(Map<String, dynamic> sessionData) async {
+    try {
+      final res = await _post('/sessions', sessionData, withAuth: true);
+      if (res.statusCode == 201) return null;
+      return _errorFrom(res);
+    } catch (_) {
+      return 'Network error. Is the server running?';
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // GET SESSION HISTORY  →  GET /api/sessions
+  // ════════════════════════════════════════════════════════════════════════════
+  static Future<List<Map<String, dynamic>>> getSessions() async {
+    final uri = Uri.parse('$baseUrl/sessions');
+    final headers = <String, String>{'Content-Type': 'application/json'};
+    if (_token != null) headers['Authorization'] = 'Bearer $_token';
+
+    final res = await http.get(uri, headers: headers);
+    if (res.statusCode == 200) {
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      final list = body['sessions'] as List? ?? [];
+      return list.cast<Map<String, dynamic>>();
+    }
+    throw Exception(_errorFrom(res));
   }
 }

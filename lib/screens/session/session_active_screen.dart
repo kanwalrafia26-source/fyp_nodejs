@@ -139,6 +139,24 @@ class _SessionActiveScreenState extends State<SessionActiveScreen>
           realLongPauseCount: analysis?['longPauseCount'] as int?,
           realWpm: analysis?['wpm'] as int?,
           realPaceStability: analysis?['paceStability'] as String?,
+          realEmotionLabel: analysis?['emotionLabel'] as String?,
+          realAnxietyScore: analysis?['anxietyScore'] as int?,
+          realPronunciationScore: analysis?['pronunciationScore'] as int?,
+          realFeedbackMessages: (analysis?['feedbackMessages'] as List?)
+              ?.map((e) => e.toString())
+              .toList(),
+          realTherapySuggestions: (analysis?['therapySuggestions'] as List?)
+              ?.map((e) => e.toString())
+              .toList(),
+          realConfidenceTip: analysis?['confidenceTip'] as String?,
+          realPitchVariability: (analysis?['pitchVariability'] as num?)?.toDouble(),
+          realJitterPercent: (analysis?['jitterPercent'] as num?)?.toDouble(),
+          realShimmerPercent: (analysis?['shimmerPercent'] as num?)?.toDouble(),
+          realFillerBreakdown: (analysis?['fillerBreakdown'] as Map?)
+              ?.map((k, v) => MapEntry(k.toString(), v as int)),
+          realLowConfidenceWords: (analysis?['lowConfidenceWords'] as List?)
+              ?.map((e) => e.toString())
+              .toList(),
         ),
       ),
     );

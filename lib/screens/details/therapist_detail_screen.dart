@@ -1,7 +1,24 @@
 import 'package:flutter/material.dart';
 
 class TherapistDetailScreen extends StatelessWidget {
-  const TherapistDetailScreen({super.key});
+  // Real data from Module 4 (rule-based acoustic emotion detection).
+  // Null falls back to the original example content.
+  final String? realEmotionLabel;
+  final int? realAnxietyScore;
+  final double? realPitchVariability;
+  final double? realJitterPercent;
+  final double? realShimmerPercent;
+
+  const TherapistDetailScreen({
+    super.key,
+    this.realEmotionLabel,
+    this.realAnxietyScore,
+    this.realPitchVariability,
+    this.realJitterPercent,
+    this.realShimmerPercent,
+  });
+
+  bool get hasRealData => realEmotionLabel != null && realAnxietyScore != null;
 
   static const Color kBg       = Color(0xFFFFFFFF);
   static const Color kHeader   = Color(0xFF1C0E4E);
@@ -23,82 +40,251 @@ class TherapistDetailScreen extends StatelessWidget {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // ── Header ───────────────────────────────────────────────
             _buildHeader(context),
-
-            // ── AI Therapist label ───────────────────────────────────
             _buildSectionLabel(),
 
-            // ── Anxiety ──────────────────────────────────────────────
-            _buildEmotionBlock(
-              title: 'Anxiety',
-              level: 'Mild',
-              levelColor: kOrange,
-              dotColor: kOrange,
-              subLabel: 'WHY DETECTED - 3 SIGNALS AGREED',
-              signals: [
-                _Signal('Speed was fast - rushed at 0:00-1:00 and 4:00-4:12', null, kRed),
-                _Signal('Voice jitter detected', '- slight trembling at minute 2', kRed),
-                _Signal('Filler words high', '- 9 fillers signal nervousness', kRed),
-              ],
-              improve: 'Take 2 slow breaths before starting. Pause on purpose - silence sounds confident, not weak.',
-            ),
+            if (hasRealData) ...[
+              // Honesty note: we only compute ONE overall emotion label +
+              // anxiety score (Module 4 is rule-based over acoustic
+              // features), not independent Stress/Fear/Sadness/Confidence
+              // scores. Real mode shows exactly what was computed, nothing
+              // fabricated beyond that.
+              _buildSimpleEmotion(
+                title: 'Detected emotion',
+                level: realEmotionLabel!,
+                levelColor: _emotionColor(realEmotionLabel!),
+                dotColor: _emotionColor(realEmotionLabel!),
+              ),
+              _buildRealAnxietyBlock(),
+            ] else ...[
+              _buildEmotionBlock(
+                title: 'Anxiety',
+                level: 'Mild',
+                levelColor: kOrange,
+                dotColor: kOrange,
+                subLabel: 'WHY DETECTED - 3 SIGNALS AGREED',
+                signals: [
+                  _Signal('Speed was fast - rushed at 0:00-1:00 and 4:00-4:12', null, kRed),
+                  _Signal('Voice jitter detected', '- slight trembling at minute 2', kRed),
+                  _Signal('Filler words high', '- 9 fillers signal nervousness', kRed),
+                ],
+                improve: 'Take 2 slow breaths before starting. Pause on purpose - silence sounds confident, not weak.',
+              ),
+              _buildEmotionBlock(
+                title: 'Stress',
+                level: 'Low',
+                levelColor: kGreen,
+                dotColor: kGreen,
+                subLabel: 'WHY DETECTED - 2 SIGNALS AGREED',
+                signals: [
+                  _Signal('Energy spike at start - slight pressure in the first 30 sec', null, kRed),
+                  _Signal('Strained tone was minimal - voice stayed relaxed overall', null, kRed),
+                ],
+                improve: 'Start slower - the first 30 seconds set your tone for the whole session.',
+              ),
+              _buildSimpleEmotion(
+                title: 'Fear',
+                level: 'None detected ✓',
+                levelColor: kGreen,
+                dotColor: kGreen,
+              ),
+              _buildSimpleEmotion(
+                title: 'Sadness',
+                level: 'None detected ✓',
+                levelColor: kGreen,
+                dotColor: kGreen,
+              ),
+              _buildEmotionBlock(
+                title: 'Confidence',
+                level: 'High',
+                levelColor: kPrimary,
+                dotColor: kPrimary,
+                subLabel: 'WHY DETECTED - 3 SIGNALS AGREED',
+                signals: [
+                  _Signal('Volume was strong - steady and audible throughout', null, kGreen),
+                  _Signal('Energy stayed high - 74% energy maintained', null, kGreen),
+                  _Signal('Voice stability good - 76% stable, no major dips', null, kGreen),
+                ],
+                improve: null,
+                keepDoing: 'Your confidence is your strongest asset. Channel it into slowing down - you will sound even more powerful. The calmer you go, the stronger you sound.',
+              ),
+            ],
 
-            // ── Stress ───────────────────────────────────────────────
-            _buildEmotionBlock(
-              title: 'Stress',
-              level: 'Low',
-              levelColor: kGreen,
-              dotColor: kGreen,
-              subLabel: 'WHY DETECTED - 2 SIGNALS AGREED',
-              signals: [
-                _Signal('Energy spike at start - slight pressure in the first 30 sec', null, kRed),
-                _Signal('Strained tone was minimal - voice stayed relaxed overall', null, kRed),
-              ],
-              improve: 'Start slower - the first 30 seconds set your tone for the whole session.',
-            ),
-
-            // ── Fear ─────────────────────────────────────────────────
-            _buildSimpleEmotion(
-              title: 'Fear',
-              level: 'None detected ✓',
-              levelColor: kGreen,
-              dotColor: kGreen,
-            ),
-
-            // ── Sadness ──────────────────────────────────────────────
-            _buildSimpleEmotion(
-              title: 'Sadness',
-              level: 'None detected ✓',
-              levelColor: kGreen,
-              dotColor: kGreen,
-            ),
-
-            // ── Confidence ───────────────────────────────────────────
-            _buildEmotionBlock(
-              title: 'Confidence',
-              level: 'High',
-              levelColor: kPrimary,
-              dotColor: kPrimary,
-              subLabel: 'WHY DETECTED - 3 SIGNALS AGREED',
-              signals: [
-                _Signal('Volume was strong - steady and audible throughout', null, kGreen),
-                _Signal('Energy stayed high - 74% energy maintained', null, kGreen),
-                _Signal('Voice stability good - 76% stable, no major dips', null, kGreen),
-              ],
-              improve: null,
-              keepDoing: 'Your confidence is your strongest asset. Channel it into slowing down - you will sound even more powerful. The calmer you go, the stronger you sound.',
-            ),
-
-            // ── AI Insight ───────────────────────────────────────────
             _buildAIInsight(),
-
-            // ── Footer ───────────────────────────────────────────────
             _buildFooter(),
-
             const SizedBox(height: 20),
           ],
         ),
+      ),
+    );
+  }
+
+  Color _emotionColor(String emotion) {
+    switch (emotion) {
+      case 'Anxious':
+        return kOrange;
+      case 'Angry':
+        return kRed;
+      case 'Sad':
+        return const Color(0xFF7B6AB5);
+      case 'Calm':
+        return kGreen;
+      case 'Happy':
+      default:
+        return kPrimary;
+    }
+  }
+
+  // ── Real anxiety block, built from actual acoustic numbers ─────────────────
+  Widget _buildRealAnxietyBlock() {
+    final score = realAnxietyScore!;
+    final level = score >= 65 ? 'High' : score >= 35 ? 'Mild' : 'Low';
+    final levelColor = score >= 65 ? kRed : score >= 35 ? kOrange : kGreen;
+
+    final signals = <_Signal>[];
+    if (realPitchVariability != null && realPitchVariability! > 0.15) {
+      signals.add(_Signal(
+        'Pitch variability was elevated',
+        '- ${(realPitchVariability! * 100).toStringAsFixed(0)}% (typical conversational range is ~10-15%)',
+        kRed,
+      ));
+    }
+    if (realJitterPercent != null && realJitterPercent! > 1.04) {
+      signals.add(_Signal(
+        'Voice jitter above typical range',
+        '- ${realJitterPercent!.toStringAsFixed(2)}% (reference: <1.04%)',
+        kRed,
+      ));
+    }
+    if (realShimmerPercent != null && realShimmerPercent! > 3.81) {
+      signals.add(_Signal(
+        'Voice shimmer above typical range',
+        '- ${realShimmerPercent!.toStringAsFixed(2)}% (reference: <3.81%)',
+        kRed,
+      ));
+    }
+    if (signals.isEmpty) {
+      signals.add(_Signal(
+        'Pitch, jitter, and shimmer all stayed within typical conversational range',
+        null,
+        kGreen,
+      ));
+    }
+
+    return Container(
+      color: kBg,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Anxiety / stress score',
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: kHeader)),
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                          color: levelColor, shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 4),
+                    Text('$level ($score/100)',
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: levelColor)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 6),
+            child: Text('WHY DETECTED — FROM ACOUSTIC FEATURES',
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFFAAAAAA),
+                    letterSpacing: 0.3)),
+          ),
+          ...signals.map((s) => Padding(
+                padding: const EdgeInsets.fromLTRB(16, 2, 16, 2),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      margin: const EdgeInsets.only(top: 4, right: 6),
+                      decoration: BoxDecoration(
+                          color: s.dotColor, shape: BoxShape.circle),
+                    ),
+                    Expanded(
+                      child: RichText(
+                        text: TextSpan(
+                          style: const TextStyle(
+                              fontSize: 11, color: Color(0xFF444444)),
+                          children: [
+                            TextSpan(text: s.text),
+                            if (s.highlight != null)
+                              TextSpan(
+                                text: ' ${s.highlight}',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: s.dotColor),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: score >= 65 ? kImprove : const Color(0xFFF0FDF6),
+                borderRadius: BorderRadius.circular(10),
+                border: score < 35
+                    ? Border.all(color: kGreen, width: 1.2)
+                    : null,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    score >= 65 ? 'HOW TO IMPROVE NEXT SESSION' : 'KEEP DOING THIS',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: score >= 65 ? kPrimary : kGreen,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    score >= 65
+                        ? 'Try box breathing before your next session: inhale 4 seconds, hold 4, exhale 4, hold 4. Repeat 4 times.'
+                        : 'Your voice stayed steady and controlled — that vocal composure is genuinely hard to build, keep practicing at this level.',
+                    style: const TextStyle(
+                        fontSize: 11, color: Color(0xFF444444), height: 1.5),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Container(height: 1, color: kDivider),
+        ],
       ),
     );
   }
@@ -111,7 +297,6 @@ class TherapistDetailScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Back button
           Row(
             children: [
               GestureDetector(
@@ -136,10 +321,8 @@ class TherapistDetailScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          // Score + greeting
           Row(
             children: [
-              // Score ring
               SizedBox(
                 width: 56,
                 height: 56,
@@ -163,16 +346,18 @@ class TherapistDetailScreen extends StatelessWidget {
                         border: Border.all(color: kYellow, width: 3),
                       ),
                     ),
-                    const Column(
+                    Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('74',
-                            style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                                height: 1.0)),
-                        Text('/100',
+                        Text(
+                          hasRealData ? '${100 - realAnxietyScore!}' : '74',
+                          style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              height: 1.0),
+                        ),
+                        const Text('/100',
                             style: TextStyle(
                                 fontSize: 8,
                                 color: Color(0xFFB9A8E8))),
@@ -206,11 +391,13 @@ class TherapistDetailScreen extends StatelessWidget {
                         color: kYellow,
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: const Text('+6 from last time',
-                          style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: kYellowDk)),
+                      child: Text(
+                        hasRealData ? 'Live pipeline result' : '+6 from last time',
+                        style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: kYellowDk),
+                      ),
                     ),
                   ],
                 ),
@@ -267,7 +454,7 @@ class TherapistDetailScreen extends StatelessWidget {
     );
   }
 
-  // ── Emotion block with signals + improve ───────────────────────────────────
+  // ── Emotion block with signals + improve (fallback example data) ───────────
   Widget _buildEmotionBlock({
     required String title,
     required String level,
@@ -283,7 +470,6 @@ class TherapistDetailScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title row
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
             child: Row(
@@ -313,8 +499,6 @@ class TherapistDetailScreen extends StatelessWidget {
               ],
             ),
           ),
-
-          // Sub label
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
             child: Text(subLabel,
@@ -324,8 +508,6 @@ class TherapistDetailScreen extends StatelessWidget {
                     color: Color(0xFFAAAAAA),
                     letterSpacing: 0.3)),
           ),
-
-          // Signals
           ...signals.map((s) => Padding(
                 padding: const EdgeInsets.fromLTRB(16, 2, 16, 2),
                 child: Row(
@@ -359,8 +541,6 @@ class TherapistDetailScreen extends StatelessWidget {
                   ],
                 ),
               )),
-
-          // Improve / Keep doing box
           if (improve != null || keepDoing != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
@@ -472,9 +652,11 @@ class TherapistDetailScreen extends StatelessWidget {
           const SizedBox(height: 8),
           Container(height: 1, color: kDivider),
           const SizedBox(height: 10),
-          const Text(
-            '"Your words were clear - but your body gave you away. Slow your pace, own your pauses, and anxiety loses its grip."',
-            style: TextStyle(
+          Text(
+            hasRealData
+                ? '"Detected emotion: $realEmotionLabel, anxiety score: $realAnxietyScore/100 — based on real pitch, jitter, and shimmer measurements from this recording."'
+                : '"Your words were clear - but your body gave you away. Slow your pace, own your pauses, and anxiety loses its grip."',
+            style: const TextStyle(
               fontSize: 13,
               fontStyle: FontStyle.italic,
               color: kHeader,

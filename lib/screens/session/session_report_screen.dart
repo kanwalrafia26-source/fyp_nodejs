@@ -5,6 +5,8 @@ import 'session_active_screen.dart';
 import '../details/coach_detail_screen.dart';
 import '../details/therapist_detail_screen.dart';
 import '../details/voice_analysis_screen.dart';
+import '../../services/api_service.dart';
+import '../../core/app_flushbar.dart';
 
 class SessionReportScreen extends StatefulWidget {
   final int selectedAI; // 0=Coach, 1=Therapist, 2=Both
@@ -18,6 +20,17 @@ class SessionReportScreen extends StatefulWidget {
   final int? realLongPauseCount;
   final int? realWpm;
   final String? realPaceStability;
+  final String? realEmotionLabel;
+  final int? realAnxietyScore;
+  final int? realPronunciationScore;
+  final List<String>? realFeedbackMessages;
+  final List<String>? realTherapySuggestions;
+  final String? realConfidenceTip;
+  final double? realPitchVariability;
+  final double? realJitterPercent;
+  final double? realShimmerPercent;
+  final Map<String, int>? realFillerBreakdown;
+  final List<String>? realLowConfidenceWords;
 
   const SessionReportScreen({
     super.key,
@@ -28,6 +41,17 @@ class SessionReportScreen extends StatefulWidget {
     this.realLongPauseCount,
     this.realWpm,
     this.realPaceStability,
+    this.realEmotionLabel,
+    this.realAnxietyScore,
+    this.realPronunciationScore,
+    this.realFeedbackMessages,
+    this.realTherapySuggestions,
+    this.realConfidenceTip,
+    this.realPitchVariability,
+    this.realJitterPercent,
+    this.realShimmerPercent,
+    this.realFillerBreakdown,
+    this.realLowConfidenceWords,
   });
 
   bool get hasRealData => realFluencyScore != null;
@@ -40,6 +64,7 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
   bool _coachExpanded       = true;
   bool _therapistExpanded   = true;
   bool _voiceExpanded       = true;
+  bool _isSaving            = false;
 
   // ── Colours ────────────────────────────────────────────────────────────────
   static const Color kBg        = Color(0xFFFFFEF6);
@@ -59,6 +84,48 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
   static const Color kGreen     = Color(0xFF2D7A40);
 
   int get _overallScore => widget.realFluencyScore ?? 74;
+
+  Future<void> _handleSave() async {
+    if (!widget.hasRealData) {
+      showFlushbar(context, 'Nothing to save — this report used placeholder data.');
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    final error = await ApiService.saveSession({
+      'selectedAI': widget.selectedAI,
+      'transcript': widget.realTranscript ?? '',
+      'wpm': widget.realWpm,
+      'longPauseCount': widget.realLongPauseCount,
+      'fillerWordCount': widget.realFillerWordCount,
+      'paceStability': widget.realPaceStability,
+      'fluencyScore': widget.realFluencyScore,
+      'pronunciationScore': widget.realPronunciationScore,
+      'emotionLabel': widget.realEmotionLabel,
+      'anxietyScore': widget.realAnxietyScore,
+      'feedbackMessages': widget.realFeedbackMessages ?? [],
+      'therapySuggestions': widget.realTherapySuggestions ?? [],
+      'confidenceTip': widget.realConfidenceTip,
+    });
+
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+
+    if (error != null) {
+      showFlushbar(context, error);
+    } else {
+      showFlushbar(context, '✅ Session saved to your history.', isError: false);
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const SessionSetupScreen()),
+          (_) => false,
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -137,7 +204,15 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
                 onDetailTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (_) => const CoachDetailScreen()),
+                      builder: (_) => CoachDetailScreen(
+                            realFluencyScore: widget.realFluencyScore,
+                            realPronunciationScore: widget.realPronunciationScore,
+                            realFillerWordCount: widget.realFillerWordCount,
+                            realLongPauseCount: widget.realLongPauseCount,
+                            realPaceStability: widget.realPaceStability,
+                            realFillerBreakdown: widget.realFillerBreakdown,
+                            realLowConfidenceWords: widget.realLowConfidenceWords,
+                          )),
                 ),
                 child: _buildCoachContent(),
               ),
@@ -155,7 +230,13 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
                 onDetailTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (_) => const TherapistDetailScreen()),
+                      builder: (_) => TherapistDetailScreen(
+                            realEmotionLabel: widget.realEmotionLabel,
+                            realAnxietyScore: widget.realAnxietyScore,
+                            realPitchVariability: widget.realPitchVariability,
+                            realJitterPercent: widget.realJitterPercent,
+                            realShimmerPercent: widget.realShimmerPercent,
+                          )),
                 ),
                 child: _buildTherapistContent(),
               ),
@@ -204,16 +285,71 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
                         letterSpacing: -0.68,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _aiSaysMessage(),
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w300,
-                        color: kHeader,
-                        letterSpacing: -0.68,
+                    const SizedBox(height: 8),
+                    if (widget.realFeedbackMessages != null &&
+                        widget.realFeedbackMessages!.isNotEmpty) ...[
+                      // Real Module 5 output: what happened
+                      ...widget.realFeedbackMessages!.map((msg) => Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Text(
+                              '• $msg',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: kHeader,
+                                height: 1.4,
+                              ),
+                            ),
+                          )),
+                      if (widget.realTherapySuggestions != null &&
+                          widget.realTherapySuggestions!.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        const Text(
+                          'TRY THIS',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: kHeader,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        ...widget.realTherapySuggestions!.map((tip) => Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Text(
+                                '→ $tip',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontStyle: FontStyle.italic,
+                                  color: kHeader,
+                                  height: 1.4,
+                                ),
+                              ),
+                            )),
+                      ],
+                      if (widget.realConfidenceTip != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.realConfidenceTip!,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: kHeader,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ] else ...[
+                      // No real data — original placeholder line
+                      const Text(
+                        '"4 min non-stop, thats real growth!',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w300,
+                          color: kHeader,
+                          letterSpacing: -0.68,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -261,12 +397,7 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
                     child: SizedBox(
                       height: 48,
                       child: OutlinedButton(
-                        onPressed: () => Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const SessionSetupScreen()),
-                          (_) => false,
-                        ),
+                        onPressed: _isSaving ? null : _handleSave,
                         style: OutlinedButton.styleFrom(
                           foregroundColor: kHeader,
                           side: const BorderSide(color: kHeader, width: 1),
@@ -274,14 +405,21 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: const Text(
-                          'Save',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.88,
-                          ),
-                        ),
+                        child: _isSaving
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: kHeader),
+                              )
+                            : const Text(
+                                'Save',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.88,
+                                ),
+                              ),
                       ),
                     ),
                   ),
@@ -292,35 +430,6 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
         ),
       ),
     );
-  }
-
-  String _aiSaysMessage() {
-    if (!widget.hasRealData) {
-      return '"4 min non-stop, that\'s real growth!';
-    }
-    final score   = widget.realFluencyScore!;
-    final fillers = widget.realFillerWordCount ?? 0;
-    final pauses  = widget.realLongPauseCount ?? 0;
-    final wpm     = widget.realWpm ?? 0;
-    final pace    = widget.realPaceStability ?? 'Stable';
-
-    if (score >= 70) {
-      final fillerText = fillers == 0 ? 'no filler words' : '$fillers filler word${fillers > 1 ? "s" : ""}';
-      return '"Strong fluency — $fillerText detected and your pace was $pace.';
-    } else if (score >= 45) {
-      final issues = <String>[];
-      if (pauses > 0) issues.add('$pauses long pause${pauses > 1 ? 's' : ''}');
-      if (fillers > 0) issues.add('$fillers filler word${fillers > 1 ? 's' : ''}');
-      if (pace == 'Uneven') issues.add('uneven pacing');
-      final issueText = issues.isNotEmpty ? issues.join(', ') : 'a few breaks in flow';
-      return '"Decent session — $issueText held the score back. Keep going.';
-    }
-    final issues = <String>[];
-    if (pauses > 1) issues.add('$pauses long pauses');
-    if (fillers > 1) issues.add('$fillers filler words');
-    if (wpm < 80 && wpm > 0) issues.add('slow pace ($wpm WPM)');
-    final issueText = issues.isNotEmpty ? issues.join(', ') : 'too many breaks';
-    return '"Needs work — $issueText. Try pausing on purpose instead of filling silence.';
   }
 
   // ── Expandable card wrapper ────────────────────────────────────────────────
@@ -435,13 +544,14 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
     final fluencyScore = widget.realFluencyScore;
     final fillerCount = widget.realFillerWordCount;
     final paceStability = widget.realPaceStability;
+    final pronunciationScore = widget.realPronunciationScore;
 
     return Column(
       children: [
         _BarMetric(
           label: 'Pronounciation',
-          value: '80%',
-          fill: 0.81,
+          value: pronunciationScore != null ? '$pronunciationScore%' : '80%',
+          fill: (pronunciationScore ?? 81) / 100,
           color: kBarPurple,
         ),
         const SizedBox(height: 10),
@@ -475,21 +585,48 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
 
   // ── Therapist content ──────────────────────────────────────────────────────
   Widget _buildTherapistContent() {
-    // Emotion/anxiety detection is Module 4 — not built yet, so this stays
-    // as placeholder data regardless of whether we have real fluency data.
+    final emotion = widget.realEmotionLabel;
+    final anxiety = widget.realAnxietyScore;
+
+    if (emotion == null || anxiety == null) {
+      // No real data — keep the original placeholder rows.
+      return Column(
+        children: [
+          _DotMetric(label: 'Anxiety',            value: 'Mild',  dotColor: kOrange),
+          const SizedBox(height: 8),
+          _DotMetric(label: 'Stress',             value: 'Mild',  dotColor: kOrange),
+          const SizedBox(height: 8),
+          _DotMetric(label: 'Fear',               value: 'No',    dotColor: const Color(0xFF61EF8E)),
+          const SizedBox(height: 8),
+          _DotMetric(label: 'Confidence',         value: 'High',  dotColor: const Color(0xFFCC3333)),
+          const SizedBox(height: 8),
+          _DotMetric(label: 'Sadness',            value: 'Fast',  dotColor: kOrange),
+          const SizedBox(height: 8),
+          _DotMetric(label: 'Emotional Stability',value: 'Low',   dotColor: kOrange),
+        ],
+      );
+    }
+
+    // Real, rule-based result (Module 4 — acoustic features, not a trained
+    // SER model; see python/transcribe.py for the honesty note on this).
+    final anxietyLevel = anxiety >= 65
+        ? 'High'
+        : anxiety >= 35
+            ? 'Mild'
+            : 'Low';
+    final anxietyColor = anxiety >= 65
+        ? kOrange
+        : anxiety >= 35
+            ? kOrange
+            : const Color(0xFF61EF8E);
+
     return Column(
       children: [
-        _DotMetric(label: 'Anxiety',            value: 'Mild',  dotColor: kOrange),
+        _DotMetric(label: 'Detected emotion', value: emotion, dotColor: kPrimary),
         const SizedBox(height: 8),
-        _DotMetric(label: 'Stress',             value: 'Mild',  dotColor: kOrange),
+        _DotMetric(label: 'Anxiety level', value: anxietyLevel, dotColor: anxietyColor),
         const SizedBox(height: 8),
-        _DotMetric(label: 'Fear',               value: 'No',    dotColor: const Color(0xFF61EF8E)),
-        const SizedBox(height: 8),
-        _DotMetric(label: 'Confidence',         value: 'High',  dotColor: const Color(0xFFCC3333)),
-        const SizedBox(height: 8),
-        _DotMetric(label: 'Sadness',            value: 'Fast',  dotColor: kOrange),
-        const SizedBox(height: 8),
-        _DotMetric(label: 'Emotional Stability',value: 'Low',   dotColor: kOrange),
+        _DotMetric(label: 'Anxiety score', value: '$anxiety/100', dotColor: anxietyColor),
       ],
     );
   }

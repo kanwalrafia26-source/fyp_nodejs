@@ -9,8 +9,8 @@ import 'package:http/http.dart' as http;
 class ApiService {
   // Windows desktop  → localhost
   // Android emulator → 10.0.2.2
-  // Real device      → PC LAN IP, e.g. 192.168.1.x
-  static const String baseUrl = 'http://localhost:3000/api';
+  // Real device      → PC LAN IP (Wi-Fi)
+  static const String baseUrl = 'http://192.168.100.183:3000/api';
 
   // JWT token stored here after login
   static String? _token;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/app_nav.dart';
+import '../../services/api_service.dart';
 import 'mirror_talk_screen.dart';
 import 'tongue_twister_screen.dart';
 import 'story_builder_screen.dart';
@@ -12,8 +13,53 @@ class SpeakQuestScreen extends StatefulWidget {
 }
 
 class _SpeakQuestScreenState extends State<SpeakQuestScreen> {
-  int _navIndex   = 1; // Quest active
-  int _selectedGame = 1; // 0=Mirror Talk, 1=Tongue Twister, 2=Story Builder (default selected)
+  int _navIndex   = 1;
+  int _selectedGame = 1;
+
+  // ── Real XP from session history ───────────────────────────────────────────
+  // XP formula: sessionCount × 30 + avgFluency × 2
+  // Tiers: Bronze 0–199, Silver 200–499, Gold 500+
+  int  _xp         = 0;
+  bool _xpLoaded   = false;
+
+  static const int _silverThreshold = 200;
+  static const int _goldThreshold   = 500;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadXP();
+  }
+
+  Future<void> _loadXP() async {
+    try {
+      final sessions = await ApiService.getSessions();
+      if (!mounted) return;
+      final count = sessions.length;
+      final scores = sessions
+          .map((s) => (s['fluencyScore'] as num?)?.toInt())
+          .whereType<int>()
+          .toList();
+      final avgFluency =
+          scores.isEmpty ? 0 : scores.reduce((a, b) => a + b) ~/ scores.length;
+      final xp = count * 30 + avgFluency * 2;
+      setState(() { _xp = xp; _xpLoaded = true; });
+    } catch (_) {
+      if (mounted) setState(() => _xpLoaded = true);
+    }
+  }
+
+  String get _tier {
+    if (_xp >= _goldThreshold) return 'Gold';
+    if (_xp >= _silverThreshold) return 'Silver';
+    return 'Bronze';
+  }
+
+  int get _nextThreshold =>
+      _xp >= _goldThreshold ? _goldThreshold : (_xp >= _silverThreshold ? _goldThreshold : _silverThreshold);
+
+  String get _nextTierName =>
+      _xp >= _goldThreshold ? 'Max' : (_xp >= _silverThreshold ? 'Gold' : 'Silver');
 
   // ── Colours ────────────────────────────────────────────────────────────────
   static const Color kBg         = Color(0xFFF5F0FF);
@@ -177,6 +223,15 @@ class _SpeakQuestScreenState extends State<SpeakQuestScreen> {
 
   // ── Header block ────────────────────────────────────────────────────────────
   Widget _buildHeader() {
+    final xpDisplay  = _xpLoaded ? '$_xp' : '—';
+    final tierLabel  = _xpLoaded ? '$_tier' : '...';
+    final toNext     = _xpLoaded && _xp < _goldThreshold
+        ? '$_xp / $_nextThreshold'
+        : (_xp >= _goldThreshold ? 'Max rank' : '$_xp / $_nextThreshold');
+    final progress   = _xpLoaded && _nextThreshold > 0
+        ? (_xp / _nextThreshold).clamp(0.0, 1.0)
+        : 0.0;
+
     return Container(
       width: double.infinity,
       color: kHeader,
@@ -184,64 +239,45 @@ class _SpeakQuestScreenState extends State<SpeakQuestScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title row
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Left: SpeakQuest title
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'SpeakQuest',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        height: 1.21,
-                      ),
-                    ),
+                    const Text('SpeakQuest',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          height: 1.21,
+                        )),
                     const SizedBox(height: 4),
-                    const Text(
-                      'Play. Speak. Level up.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: kSubtitle,
-                        height: 1.23,
-                      ),
-                    ),
+                    const Text('Play. Speak. Level up.',
+                        style: TextStyle(
+                            fontSize: 13, color: kSubtitle, height: 1.23)),
                   ],
                 ),
               ),
-              // Right: XP
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  const Text(
-                    '340',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
-                      color: kYellow,
-                      height: 1.2,
-                    ),
-                  ),
-                  const Text(
-                    'XP · Silver',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: kSubtitle,
-                    ),
-                  ),
+                  Text(xpDisplay,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: kYellow,
+                        height: 1.2,
+                      )),
+                  Text('XP · $tierLabel',
+                      style:
+                          const TextStyle(fontSize: 11, color: kSubtitle)),
                 ],
               ),
             ],
           ),
-
           const SizedBox(height: 16),
-
-          // Progress bar card
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -254,28 +290,22 @@ class _SpeakQuestScreenState extends State<SpeakQuestScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Progress to Gold',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFFB090D0),
-                      ),
-                    ),
-                    const Text(
-                      '340 / 500',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: kYellow,
-                      ),
-                    ),
+                    Text('Progress to $_nextTierName',
+                        style: const TextStyle(
+                            fontSize: 11, color: Color(0xFFB090D0))),
+                    Text(toNext,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: kYellow,
+                        )),
                   ],
                 ),
                 const SizedBox(height: 8),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(60),
                   child: LinearProgressIndicator(
-                    value: 340 / 500,
+                    value: progress,
                     minHeight: 8,
                     backgroundColor: Colors.white.withOpacity(0.1),
                     valueColor:
@@ -285,7 +315,6 @@ class _SpeakQuestScreenState extends State<SpeakQuestScreen> {
               ],
             ),
           ),
-
           const SizedBox(height: 20),
         ],
       ),
@@ -294,61 +323,57 @@ class _SpeakQuestScreenState extends State<SpeakQuestScreen> {
 
   // ── Daily challenge banner ───────────────────────────────────────────────────
   Widget _buildDailyChallenge() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: kYellow,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        children: [
-          // Star icon box
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(12),
+    return GestureDetector(
+      onTap: () {
+        setState(() => _selectedGame = 1);
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const TongueTwisterScreen()),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: kYellow,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.star_rounded,
+                  color: Color(0xFF1A2000), size: 26),
             ),
-            child: const Icon(
-              Icons.star_rounded,
-              color: Color(0xFF1A2000),
-              size: 26,
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Daily challenge',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: kYellowDark,
+                      )),
+                  SizedBox(height: 2),
+                  Text('Say it perfectly in 3 tries · +50 XP',
+                      style: TextStyle(
+                          fontSize: 11, color: Color(0xFF3A4800))),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text(
-                  'Daily challenge',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: kYellowDark,
-                  ),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  'Say it perfectly in 3 tries · +50 XP',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFF3A4800),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Text(
-            'Go →',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: kYellowDark,
-            ),
-          ),
-        ],
+            const Text('Go →',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: kYellowDark,
+                )),
+          ],
+        ),
       ),
     );
   }

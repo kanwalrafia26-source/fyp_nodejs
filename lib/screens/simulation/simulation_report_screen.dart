@@ -1,19 +1,69 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'simulation_screen.dart';
+import '../../services/api_service.dart';
+import '../../core/app_flushbar.dart';
 import '../home/home_screen.dart';
-import 'simulation_screen.dart';
 import '../details/coach_detail_screen.dart';
 import '../details/therapist_detail_screen.dart';
+import 'simulation_screen.dart';
 
 class SimulationReportScreen extends StatefulWidget {
   final String roleName;
-  final int selectedAI; // 0=Coach,1=Therapist,2=Both
+  final String scenarioName;
+  final String difficulty;
+  final int    selectedAI;     // 0=Coach, 1=Therapist, 2=Both
+  final int    durationSeconds;
+
+  // ── Real analysis results (all nullable — falls back gracefully) ──────────
+  final String?        realTranscript;
+  final int?           realFluencyScore;
+  final int?           realFillerWordCount;
+  final int?           realLongPauseCount;
+  final int?           realWpm;
+  final String?        realPaceStability;
+  final String?        realEmotionLabel;
+  final int?           realAnxietyScore;
+  final int?           realPronunciationScore;
+  final double?        realPitchVariability;
+  final double?        realJitterPercent;
+  final double?        realShimmerPercent;
+  final double?        realPitchMeanHz;
+  final double?        realEnergyDb;
+  final List<String>?  realFeedbackMessages;
+  final List<String>?  realTherapySuggestions;
+  final String?        realConfidenceTip;
+  final Map<String,int>? realFillerBreakdown;
+  final List<String>?  realLowConfidenceWords;
+
   const SimulationReportScreen({
     super.key,
-    this.roleName   = 'Senior Web Developer',
-    this.selectedAI = 2,
+    this.roleName        = 'Senior Web Developer',
+    this.scenarioName    = 'Internship Interview',
+    this.difficulty      = 'Medium',
+    this.selectedAI      = 2,
+    this.durationSeconds = 0,
+    this.realTranscript,
+    this.realFluencyScore,
+    this.realFillerWordCount,
+    this.realLongPauseCount,
+    this.realWpm,
+    this.realPaceStability,
+    this.realEmotionLabel,
+    this.realAnxietyScore,
+    this.realPronunciationScore,
+    this.realPitchVariability,
+    this.realJitterPercent,
+    this.realShimmerPercent,
+    this.realPitchMeanHz,
+    this.realEnergyDb,
+    this.realFeedbackMessages,
+    this.realTherapySuggestions,
+    this.realConfidenceTip,
+    this.realFillerBreakdown,
+    this.realLowConfidenceWords,
   });
+
+  bool get hasRealData => realFluencyScore != null;
 
   @override
   State<SimulationReportScreen> createState() =>
@@ -24,21 +74,90 @@ class _SimulationReportScreenState
     extends State<SimulationReportScreen> {
   bool _coachExpanded     = true;
   bool _therapistExpanded = true;
+  bool _isSaving          = false;
 
-  static const Color kBg       = Color(0xFFFFFEF6);
-  static const Color kHeader   = Color(0xFF2F0A56);
-  static const Color kPrimary  = Color(0xFF5300AC);
-  static const Color kYellow   = Color(0xFFD9E366);
-  static const Color kSubtitle = Color(0xFFC097D8);
-  static const Color kCardBg   = Color(0x33E6BEF0);
-  static const Color kCardBdr  = Color(0x66F0D4FF);
-  static const Color kOrange   = Color(0xFFFFA060);
-  static const Color kBarBg    = Color(0xFFEFDAFF);
-  static const Color kBarPurple= Color(0xFF5300AC);
-  static const Color kNavBg    = Color(0xFFE6C6F7);
-  static const Color kGreen    = Color(0xFF2D7A40);
-  static const Color kBtnYellow= Color(0xFFD9E366);
-  static const Color kBtnYellowDk = Color(0xFF2A3D00);
+  // ── Colours ────────────────────────────────────────────────────────────────
+  static const Color kBg        = Color(0xFFFFFEF6);
+  static const Color kHeader    = Color(0xFF2F0A56);
+  static const Color kPrimary   = Color(0xFF5300AC);
+  static const Color kYellow    = Color(0xFFD9E366);
+  static const Color kSubtitle  = Color(0xFFC097D8);
+  static const Color kCardBg    = Color(0x33E6BEF0);
+  static const Color kCardBdr   = Color(0x66F0D4FF);
+  static const Color kOrange    = Color(0xFFFFA060);
+  static const Color kBarPurple = Color(0xFF5300AC);
+  static const Color kNavBg     = Color(0xFFE6C6F7);
+  static const Color kGreen     = Color(0xFF2D7A40);
+  static const Color kBtnYellow = Color(0xFFD9E366);
+  static const Color kBtnDk     = Color(0xFF2A3D00);
+
+  int get _score => widget.realFluencyScore ?? 74;
+
+  // ── Save ───────────────────────────────────────────────────────────────────
+  Future<void> _handleSave() async {
+    if (!widget.hasRealData) {
+      showFlushbar(context,
+          'Nothing to save — this report used placeholder data.');
+      return;
+    }
+    setState(() => _isSaving = true);
+
+    final error = await ApiService.saveSession({
+      'sessionType':  'simulation',
+      'scenarioName': widget.scenarioName,
+      'roleName':     widget.roleName,
+      'difficulty':   widget.difficulty,
+      'selectedAI':   widget.selectedAI,
+      'durationSeconds': widget.durationSeconds,
+      'transcript':   widget.realTranscript ?? '',
+      'wpm':               widget.realWpm,
+      'longPauseCount':    widget.realLongPauseCount,
+      'fillerWordCount':   widget.realFillerWordCount,
+      'paceStability':     widget.realPaceStability,
+      'fluencyScore':      widget.realFluencyScore,
+      'pronunciationScore':widget.realPronunciationScore,
+      'emotionLabel':      widget.realEmotionLabel,
+      'anxietyScore':      widget.realAnxietyScore,
+      'feedbackMessages':  widget.realFeedbackMessages  ?? [],
+      'therapySuggestions':widget.realTherapySuggestions ?? [],
+      'confidenceTip':     widget.realConfidenceTip,
+    });
+
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+
+    if (error != null) {
+      showFlushbar(context, error);
+    } else {
+      showFlushbar(context, '✅ Simulation saved to your history.',
+          isError: false);
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (_) => false,
+        );
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const SimulationScreen()),
+        );
+      }
+    }
+  }
+
+  // ── Retry ──────────────────────────────────────────────────────────────────
+  void _handleRetry() {
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      (_) => false,
+    );
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SimulationScreen()),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -50,6 +169,53 @@ class _SimulationReportScreenState
             // ── Header ──────────────────────────────────────────────
             _buildHeader(),
 
+            // ── Live transcript (only with real data) ────────────────
+            if (widget.hasRealData &&
+                widget.realTranscript != null &&
+                widget.realTranscript!.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: kCardBg,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: kCardBdr, width: 1),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 6, height: 6,
+                            decoration: const BoxDecoration(
+                                color: kGreen, shape: BoxShape.circle),
+                          ),
+                          const SizedBox(width: 6),
+                          const Text('YOUR ANSWER',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: kSubtitle,
+                                letterSpacing: 1.0,
+                              )),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(widget.realTranscript!,
+                          style: const TextStyle(
+                              fontSize: 12,
+                              color: kHeader,
+                              height: 1.4)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+
             const SizedBox(height: 16),
 
             // ── Coach card ───────────────────────────────────────────
@@ -59,9 +225,20 @@ class _SimulationReportScreenState
                 expanded: _coachExpanded,
                 onToggle: () =>
                     setState(() => _coachExpanded = !_coachExpanded),
-                onDetailTap: () => Navigator.push(context,
-                    MaterialPageRoute(
-                        builder: (_) => const CoachDetailScreen())),
+                onDetailTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CoachDetailScreen(
+                      realFluencyScore:      widget.realFluencyScore,
+                      realPronunciationScore:widget.realPronunciationScore,
+                      realFillerWordCount:   widget.realFillerWordCount,
+                      realLongPauseCount:    widget.realLongPauseCount,
+                      realPaceStability:     widget.realPaceStability,
+                      realFillerBreakdown:   widget.realFillerBreakdown,
+                      realLowConfidenceWords:widget.realLowConfidenceWords,
+                    ),
+                  ),
+                ),
                 child: _buildCoachContent(),
               ),
 
@@ -75,178 +252,106 @@ class _SimulationReportScreenState
                 expanded: _therapistExpanded,
                 onToggle: () => setState(
                     () => _therapistExpanded = !_therapistExpanded),
-                onDetailTap: () => Navigator.push(context,
-                    MaterialPageRoute(
-                        builder: (_) =>
-                            const TherapistDetailScreen())),
+                onDetailTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => TherapistDetailScreen(
+                      realEmotionLabel:   widget.realEmotionLabel,
+                      realAnxietyScore:   widget.realAnxietyScore,
+                      realPitchVariability: widget.realPitchVariability,
+                      realJitterPercent:  widget.realJitterPercent,
+                      realShimmerPercent: widget.realShimmerPercent,
+                    ),
+                  ),
+                ),
                 child: _buildTherapistContent(),
               ),
 
             if (widget.selectedAI == 1 || widget.selectedAI == 2)
               const SizedBox(height: 16),
 
-            // ── Key Moments ──────────────────────────────────────────
+            // ── AI says card ─────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'KEY MOMENTS',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.black54,
-                      letterSpacing: 1.0,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  // Best moment
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: kPrimary,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Center(
-                            child: Text('⭐',
-                                style: TextStyle(fontSize: 16)),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Best moment · 2:14',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                'Explained WebSocket vs polling clearly — structured, confident and concise.',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFFD4B8FF),
-                                  height: 1.4,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 20, vertical: 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE6BEF0),
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(
+                      color: kPrimary.withOpacity(0.07), width: 4),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('AI says',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: kHeader,
+                          letterSpacing: -0.68,
+                        )),
+                    const SizedBox(height: 8),
+                    if (widget.realFeedbackMessages != null &&
+                        widget.realFeedbackMessages!.isNotEmpty) ...[
+                      ...widget.realFeedbackMessages!
+                          .map((msg) => Padding(
+                                padding:
+                                    const EdgeInsets.only(bottom: 6),
+                                child: Text('• $msg',
+                                    style: const TextStyle(
+                                        fontSize: 14,
+                                        color: kHeader,
+                                        height: 1.4)),
+                              )),
+                      if (widget.realTherapySuggestions != null &&
+                          widget.realTherapySuggestions!.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        const Text('TRY THIS',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: kHeader,
+                              letterSpacing: 1.0,
+                            )),
+                        const SizedBox(height: 4),
+                        ...widget.realTherapySuggestions!
+                            .map((tip) => Padding(
+                                  padding:
+                                      const EdgeInsets.only(bottom: 6),
+                                  child: Text('→ $tip',
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontStyle: FontStyle.italic,
+                                        color: kHeader,
+                                        height: 1.4,
+                                      )),
+                                )),
                       ],
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  // Struggled moment
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: kPrimary,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Center(
-                            child: Text('⚠️',
-                                style: TextStyle(fontSize: 16)),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Struggled at · 3:40',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                'Speed spiked when asked about database indexing — 9 filler words in 20 seconds.',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFFD4B8FF),
-                                  height: 1.4,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                      if (widget.realConfidenceTip != null) ...[
+                        const SizedBox(height: 4),
+                        Text(widget.realConfidenceTip!,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: kHeader,
+                              height: 1.4,
+                            )),
                       ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // ── AI says ──────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'AI says',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: kHeader,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE6BEF0),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _BulletPoint(
-                            'Practice answering under 45 seconds per question'),
-                        SizedBox(height: 6),
-                        _BulletPoint(
-                            'Drill database and system design scenarios next'),
-                        SizedBox(height: 6),
-                        _BulletPoint(
-                            'Run the Hard Mode CTO simulation when ready'),
-                      ],
-                    ),
-                  ),
-                ],
+                    ] else ...[
+                      const Text(
+                        'Complete a session with real audio to get AI coaching feedback here.',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: kHeader,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
 
@@ -261,35 +366,18 @@ class _SimulationReportScreenState
                     child: SizedBox(
                       height: 52,
                       child: ElevatedButton(
-                        onPressed: () {
-                          // Keep HomeScreen as base, push SimulationScreen on top
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const HomeScreen()),
-                            (_) => false,
-                          );
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const SimulationScreen()),
-                          );
-                        },
+                        onPressed: _handleRetry,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: kBtnYellow,
-                          foregroundColor: kBtnYellowDk,
+                          foregroundColor: kBtnDk,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
+                              borderRadius: BorderRadius.circular(14)),
                         ),
-                        child: const Text(
-                          'Retry Simulation',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+                        child: const Text('Retry',
+                            style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700)),
                       ),
                     ),
                   ),
@@ -298,35 +386,24 @@ class _SimulationReportScreenState
                     child: SizedBox(
                       height: 52,
                       child: OutlinedButton(
-                        onPressed: () {
-                          // Keep HomeScreen as base, push SimulationScreen on top
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const HomeScreen()),
-                            (_) => false,
-                          );
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const SimulationScreen()),
-                          );
-                        },
+                        onPressed: _isSaving ? null : _handleSave,
                         style: OutlinedButton.styleFrom(
                           foregroundColor: kHeader,
                           side: const BorderSide(
                               color: kHeader, width: 1.5),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
+                              borderRadius: BorderRadius.circular(14)),
                         ),
-                        child: const Text(
-                          'Save Report',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+                        child: _isSaving
+                            ? const SizedBox(
+                                width: 20, height: 20,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: kHeader),
+                              )
+                            : const Text('Save',
+                                style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700)),
                       ),
                     ),
                   ),
@@ -341,6 +418,10 @@ class _SimulationReportScreenState
 
   // ── Header ─────────────────────────────────────────────────────────────────
   Widget _buildHeader() {
+    final mins = widget.durationSeconds ~/ 60;
+    final secs = widget.durationSeconds % 60;
+    final dur  = mins > 0 ? '${mins}m ${secs}s' : '${secs}s';
+
     return Container(
       width: double.infinity,
       color: kHeader,
@@ -348,27 +429,26 @@ class _SimulationReportScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Session complete',
+          const Text('Simulation complete',
               style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w700,
-                  color: kSubtitle)),
+                  color: kSubtitle,
+                  letterSpacing: -0.68)),
           const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Score ring
               SizedBox(
-                width: 96,
-                height: 96,
+                width: 96, height: 96,
                 child: CustomPaint(
-                  painter: _ScoreRingPainter(score: 74),
+                  painter: _ScoreRingPainter(score: _score),
                   child: Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text('74',
-                            style: TextStyle(
+                        Text('$_score',
+                            style: const TextStyle(
                                 fontSize: 25,
                                 fontWeight: FontWeight.w800,
                                 color: Colors.white,
@@ -401,15 +481,19 @@ class _SimulationReportScreenState
                         color: kYellow,
                         borderRadius: BorderRadius.circular(60),
                       ),
-                      child: const Text('+6 vs last session',
-                          style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF4C5414))),
+                      child: Text(
+                        widget.hasRealData
+                            ? 'Live pipeline result'
+                            : 'No mic — placeholder',
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF4C5414)),
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Duration: 4m 52s · 8 questions\nRole: ${widget.roleName}',
+                      'Duration: $dur · Role: ${widget.roleName}',
                       style: const TextStyle(
                           fontSize: 12,
                           color: Colors.white70,
@@ -425,7 +509,7 @@ class _SimulationReportScreenState
     );
   }
 
-  // ── Expandable card ────────────────────────────────────────────────────────
+  // ── Expandable card wrapper ────────────────────────────────────────────────
   Widget _buildExpandableCard({
     required String title,
     required bool expanded,
@@ -461,21 +545,34 @@ class _SimulationReportScreenState
                           style: const TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.w700,
-                              color: kPrimary)),
+                              color: kPrimary,
+                              letterSpacing: -0.68)),
                     ),
                     const Spacer(),
                     if (onDetailTap != null)
                       GestureDetector(
                         onTap: onDetailTap,
                         child: Container(
-                          width: 20,
-                          height: 20,
+                          width: 20, height: 20,
                           decoration: const BoxDecoration(
                               color: kNavBg, shape: BoxShape.circle),
-                          child: const Icon(
-                              Icons.chevron_right_rounded,
-                              color: kHeader,
-                              size: 14),
+                          child: const Icon(Icons.chevron_right_rounded,
+                              color: kHeader, size: 14),
+                        ),
+                      )
+                    else
+                      GestureDetector(
+                        onTap: onToggle,
+                        child: Container(
+                          width: 20, height: 20,
+                          decoration: const BoxDecoration(
+                              color: kNavBg, shape: BoxShape.circle),
+                          child: Icon(
+                            expanded
+                                ? Icons.expand_less_rounded
+                                : Icons.expand_more_rounded,
+                            color: kHeader, size: 14,
+                          ),
                         ),
                       ),
                   ],
@@ -499,31 +596,74 @@ class _SimulationReportScreenState
     );
   }
 
+  // ── Coach content ──────────────────────────────────────────────────────────
   Widget _buildCoachContent() {
+    final fluency      = widget.realFluencyScore;
+    final fillers      = widget.realFillerWordCount;
+    final pace         = widget.realPaceStability;
+    final pronunciation = widget.realPronunciationScore;
+
     return Column(children: [
-      _BarMetric(label: 'Pronounciation', value: '80%', fill: 0.81, color: kBarPurple),
+      _BarMetric(
+        label: 'Pronunciation',
+        value: pronunciation != null ? '$pronunciation%' : '80%',
+        fill:  (pronunciation ?? 80) / 100,
+        color: kBarPurple,
+      ),
       const SizedBox(height: 10),
-      _BarMetric(label: 'Fluency',        value: '68%', fill: 0.66, color: kBarPurple),
+      _BarMetric(
+        label: 'Fluency',
+        value: fluency != null ? '$fluency%' : '68%',
+        fill:  (fluency ?? 68) / 100,
+        color: kBarPurple,
+      ),
       const SizedBox(height: 10),
-      _BarMetric(label: 'Pacing',         value: '80%', fill: 0.80, color: kBarPurple),
+      _BarMetric(
+        label: 'Pacing',
+        value: pace ?? '80%',
+        fill:  pace != null ? (pace == 'Stable' ? 0.85 : 0.45) : 0.80,
+        color: kBarPurple,
+      ),
       const SizedBox(height: 10),
-      _BarMetric(label: 'Filler words',   value: '68%', fill: 0.66, color: kBarPurple),
+      _BarMetric(
+        label: 'Filler words',
+        value: fillers != null ? '$fillers words' : '68%',
+        fill:  fillers != null
+            ? (1 - min(fillers, 10) / 10).clamp(0.0, 1.0)
+            : 0.66,
+        color: kBarPurple,
+      ),
     ]);
   }
 
+  // ── Therapist content ──────────────────────────────────────────────────────
   Widget _buildTherapistContent() {
+    final emotion = widget.realEmotionLabel;
+    final anxiety = widget.realAnxietyScore;
+
+    if (emotion == null || anxiety == null) {
+      return Column(children: [
+        _DotMetric(label: 'Anxiety',             value: 'Mild', dotColor: kOrange),
+        const SizedBox(height: 8),
+        _DotMetric(label: 'Stress',              value: 'Mild', dotColor: kOrange),
+        const SizedBox(height: 8),
+        _DotMetric(label: 'Fear',                value: 'No',   dotColor: const Color(0xFF61EF8E)),
+        const SizedBox(height: 8),
+        _DotMetric(label: 'Confidence',          value: 'High', dotColor: const Color(0xFFCC3333)),
+        const SizedBox(height: 8),
+        _DotMetric(label: 'Emotional Stability', value: 'Low',  dotColor: kOrange),
+      ]);
+    }
+
+    final anxietyLevel = anxiety >= 65 ? 'High' : anxiety >= 35 ? 'Mild' : 'Low';
+    final anxietyColor = anxiety >= 35 ? kOrange : const Color(0xFF61EF8E);
+
     return Column(children: [
-      _DotMetric(label: 'Anxiety',             value: 'Mild',  dotColor: kOrange),
+      _DotMetric(label: 'Detected emotion', value: emotion,        dotColor: kPrimary),
       const SizedBox(height: 8),
-      _DotMetric(label: 'Stress',              value: 'Mild',  dotColor: kOrange),
+      _DotMetric(label: 'Anxiety level',    value: anxietyLevel,   dotColor: anxietyColor),
       const SizedBox(height: 8),
-      _DotMetric(label: 'Fear',                value: 'No',    dotColor: const Color(0xFF61EF8E)),
-      const SizedBox(height: 8),
-      _DotMetric(label: 'Confidence',          value: 'High',  dotColor: const Color(0xFFCC3333)),
-      const SizedBox(height: 8),
-      _DotMetric(label: 'Sadness',             value: 'Fast',  dotColor: kOrange),
-      const SizedBox(height: 8),
-      _DotMetric(label: 'Emotional Stability', value: 'Low',   dotColor: kOrange),
+      _DotMetric(label: 'Anxiety score',    value: '$anxiety/100', dotColor: anxietyColor),
     ]);
   }
 }
@@ -536,10 +676,19 @@ class _ScoreRingPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2, cy = size.height / 2, r = size.width / 2 - 6;
     canvas.drawCircle(Offset(cx, cy), r,
-        Paint()..color = const Color(0xFF543C6E)..style = PaintingStyle.stroke..strokeWidth = 10);
-    canvas.drawArc(Rect.fromCircle(center: Offset(cx, cy), radius: r),
-        -pi / 2, 2 * pi * score / 100, false,
-        Paint()..color = const Color(0xFFD9E366)..style = PaintingStyle.stroke..strokeWidth = 10..strokeCap = StrokeCap.round);
+        Paint()
+          ..color = const Color(0xFF543C6E)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 10);
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset(cx, cy), radius: r),
+      -pi / 2, 2 * pi * score / 100, false,
+      Paint()
+        ..color = const Color(0xFFD9E366)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 10
+        ..strokeCap = StrokeCap.round,
+    );
   }
   @override
   bool shouldRepaint(_ScoreRingPainter old) => old.score != score;
@@ -550,19 +699,26 @@ class _BarMetric extends StatelessWidget {
   final String label, value;
   final double fill;
   final Color color;
-  const _BarMetric({required this.label, required this.value, required this.fill, required this.color});
+  const _BarMetric({
+    required this.label, required this.value,
+    required this.fill,  required this.color,
+  });
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFFC097D8))),
-        Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF2F0A56))),
+        Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFFC097D8), letterSpacing: -0.56)),
+        Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF2F0A56), letterSpacing: -0.56)),
       ]),
       const SizedBox(height: 4),
-      ClipRRect(borderRadius: BorderRadius.circular(60),
-        child: LinearProgressIndicator(value: fill, minHeight: 9,
+      ClipRRect(
+        borderRadius: BorderRadius.circular(60),
+        child: LinearProgressIndicator(
+          value: fill, minHeight: 9,
           backgroundColor: const Color(0xFFEFDAFF),
-          valueColor: AlwaysStoppedAnimation<Color>(color))),
+          valueColor: AlwaysStoppedAnimation<Color>(color),
+        ),
+      ),
     ]);
   }
 }
@@ -571,30 +727,18 @@ class _BarMetric extends StatelessWidget {
 class _DotMetric extends StatelessWidget {
   final String label, value;
   final Color dotColor;
-  const _DotMetric({required this.label, required this.value, required this.dotColor});
+  const _DotMetric({
+    required this.label, required this.value, required this.dotColor,
+  });
   @override
   Widget build(BuildContext context) {
     return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-      Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFFC097D8))),
+      Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFFC097D8), letterSpacing: -0.56)),
       Row(children: [
         Container(width: 6, height: 6, decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle)),
         const SizedBox(width: 4),
-        Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
-            color: dotColor == const Color(0xFFFFA060) ? dotColor : const Color(0xFF2F0A56))),
+        Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: dotColor, letterSpacing: -0.56)),
       ]),
-    ]);
-  }
-}
-
-// ── Bullet point ───────────────────────────────────────────────────────────────
-class _BulletPoint extends StatelessWidget {
-  final String text;
-  const _BulletPoint(this.text);
-  @override
-  Widget build(BuildContext context) {
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('• ', style: TextStyle(fontSize: 13, color: Color(0xFF2F0A56), fontWeight: FontWeight.w700)),
-      Expanded(child: Text(text, style: const TextStyle(fontSize: 13, color: Color(0xFF2F0A56), height: 1.4))),
     ]);
   }
 }

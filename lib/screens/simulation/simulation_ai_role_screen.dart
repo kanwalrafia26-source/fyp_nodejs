@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../session/session_active_screen.dart';
 import 'simulation_active_screen.dart';
 
 class SimulationAIRoleScreen extends StatefulWidget {
@@ -317,10 +316,43 @@ class _SimulationAIRoleScreenState
                 height: 54,
                 child: ElevatedButton(
                   onPressed: () {
+                    final difficultyLabel =
+                        _difficulties[_difficulty];
+                    final roleLabels = [
+                      _seniorDevRoles,
+                      _hrRoles,
+                      _ctoRoles,
+                      _panelRoles,
+                      const <String>[],
+                    ];
+                    final subRoles = roleLabels[_selectedRole];
+                    String roleName;
+                    if (_selectedRole == 4) {
+                      // "Other" — use whatever they typed
+                      roleName = _customCtrl.text.trim().isNotEmpty
+                          ? _customCtrl.text.trim()
+                          : 'Custom Role';
+                    } else {
+                      roleName = (subRoles.isNotEmpty &&
+                              _selectedSubRole < subRoles.length)
+                          ? subRoles[_selectedSubRole]
+                          : [
+                              'Senior Web Developer',
+                              'HR Recruiter',
+                              'CTO / Tech Lead',
+                              'Panel Interview',
+                              'Other',
+                            ][_selectedRole];
+                    }
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const SimulationActiveScreen(),
+                        builder: (_) => SimulationActiveScreen(
+                          roleName:     roleName,
+                          scenarioName: widget.scenarioName,
+                          difficulty:   difficultyLabel,
+                          selectedAI:   2,
+                        ),
                       ),
                     );
                   },

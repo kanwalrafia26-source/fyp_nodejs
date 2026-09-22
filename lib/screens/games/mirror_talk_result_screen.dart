@@ -2,7 +2,16 @@ import 'package:flutter/material.dart';
 import 'mirror_talk_screen.dart';
 
 class MirrorTalkResultScreen extends StatelessWidget {
-  const MirrorTalkResultScreen({super.key});
+  final List<Map<String, dynamic>> roundResults;
+  final int overallScore;
+  final bool hasRealData;
+
+  const MirrorTalkResultScreen({
+    super.key,
+    required this.roundResults,
+    required this.overallScore,
+    required this.hasRealData,
+  });
 
   static const Color kBg       = Color(0xFFFAF6FF);
   static const Color kHeader   = Color(0xFF290451);
@@ -13,17 +22,23 @@ class MirrorTalkResultScreen extends StatelessWidget {
   static const Color kCardBg   = Color(0xFFFFFFFF);
   static const Color kGreen    = Color(0xFF2D7A40);
   static const Color kOrange   = Color(0xFFC07030);
-  static const Color kBarBg    = Color(0xFFF0E8FF);
   static const Color kXPCard   = Color(0xFF290451);
 
-  // Round data
-  static const _rounds = [
-    ('Excited',   0.88, '88%', Color(0xFF5300AC), 3),
-    ('Calm',      0.72, '72%', Color(0xFF5300AC), 2),
-    ('Confident', 0.91, '91%', Color(0xFF2D7A40), 3),
-    ('Nervous',   0.60, '60%', Color(0xFFC07030), 2),
-    ('Happy',     0.82, '82%', Color(0xFF5300AC), 3),
-  ];
+  String get _bestEmotion {
+    if (roundResults.isEmpty) return '—';
+    return roundResults.reduce((a, b) =>
+        (a['expressionScore'] as int) >= (b['expressionScore'] as int)
+            ? a
+            : b)['emotion'] as String? ?? '—';
+  }
+
+  String get _worstEmotion {
+    if (roundResults.isEmpty) return '—';
+    return roundResults.reduce((a, b) =>
+        (a['expressionScore'] as int) <= (b['expressionScore'] as int)
+            ? a
+            : b)['emotion'] as String? ?? '—';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,48 +47,62 @@ class MirrorTalkResultScreen extends StatelessWidget {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // ── Header ──────────────────────────────────────────────
             _buildHeader(),
-
             const SizedBox(height: 16),
 
-            // ── Round breakdown card ─────────────────────────────────
+            // ── Round breakdown ────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Container(
                 decoration: BoxDecoration(
                   color: kCardBg,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFEDE0FF), width: 1.5),
+                  border: Border.all(
+                      color: const Color(0xFFEDE0FF), width: 1.5),
                 ),
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'ROUND BREAKDOWN',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: kSubtitle,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
+                    const Text('ROUND BREAKDOWN',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: kSubtitle,
+                          letterSpacing: 1.2,
+                        )),
                     const SizedBox(height: 10),
-                    ...List.generate(_rounds.length, (i) {
-                      final r = _rounds[i];
+                    ...List.generate(roundResults.length, (i) {
+                      final r   = roundResults[i];
+                      final score = r['expressionScore'] as int;
+                      final emo   = r['emotion'] as String? ?? '—';
+                      final stars = _starsForScore(score);
+                      final color = score >= 75
+                          ? kPrimary
+                          : score >= 50
+                              ? kOrange
+                              : const Color(0xFFD05050);
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: _RoundRow(
                           number: i + 1,
-                          emotion: r.$1,
-                          fill: r.$2,
-                          percent: r.$3,
-                          barColor: r.$4,
-                          stars: r.$5,
+                          emotion: emo,
+                          fill: score / 100,
+                          percent: hasRealData ? '$score%' : '—',
+                          barColor: color,
+                          stars: stars,
                         ),
                       );
                     }),
+                    if (!hasRealData)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6),
+                        child: Text(
+                          'Grant mic permission and replay for real scores.',
+                          style: TextStyle(
+                              fontSize: 10, color: kSubtitle),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -81,7 +110,7 @@ class MirrorTalkResultScreen extends StatelessWidget {
 
             const SizedBox(height: 14),
 
-            // ── Best / Needs work row ────────────────────────────────
+            // ── Best / Needs work ──────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
@@ -94,25 +123,19 @@ class MirrorTalkResultScreen extends StatelessWidget {
                         color: const Color(0xFFF0FFF4),
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child: const Column(
+                      child: Column(
                         children: [
-                          Text(
-                            'Best emotion',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: kSubtitle,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Confident',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: kGreen,
-                            ),
-                          ),
+                          const Text('Best emotion',
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: kSubtitle)),
+                          const SizedBox(height: 4),
+                          Text(_bestEmotion,
+                              style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: kGreen)),
                         ],
                       ),
                     ),
@@ -126,25 +149,19 @@ class MirrorTalkResultScreen extends StatelessWidget {
                         color: const Color(0xFFFFF8F0),
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child: const Column(
+                      child: Column(
                         children: [
-                          Text(
-                            'Needs work',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: kSubtitle,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Nervous',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: kOrange,
-                            ),
-                          ),
+                          const Text('Needs work',
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: kSubtitle)),
+                          const SizedBox(height: 4),
+                          Text(_worstEmotion,
+                              style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: kOrange)),
                         ],
                       ),
                     ),
@@ -155,7 +172,7 @@ class MirrorTalkResultScreen extends StatelessWidget {
 
             const SizedBox(height: 14),
 
-            // ── XP + Badge card ──────────────────────────────────────
+            // ── XP card ────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Container(
@@ -168,41 +185,31 @@ class MirrorTalkResultScreen extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // XP
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: const [
-                          Text(
-                            'XP earned',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Color(0xFFC9A0E0),
-                            ),
-                          ),
+                          Text('XP earned',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFFC9A0E0))),
                           SizedBox(height: 4),
-                          Text(
-                            '+150 XP',
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
-                              color: kYellow,
-                            ),
-                          ),
+                          Text('+150 XP',
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                                color: kYellow,
+                              )),
                         ],
                       ),
                     ),
-                    // Badge
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text(
-                          'Badge unlocked',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFFC9A0E0),
-                          ),
-                        ),
+                        const Text('Badge unlocked',
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFFC9A0E0))),
                         const SizedBox(height: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -211,16 +218,15 @@ class MirrorTalkResultScreen extends StatelessWidget {
                             color: const Color(0xFF3A0870),
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                                color: kYellow.withOpacity(0.3), width: 1),
+                                color: kYellow.withOpacity(0.3),
+                                width: 1),
                           ),
-                          child: const Text(
-                            'Emotion Master',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: kYellow,
-                            ),
-                          ),
+                          child: const Text('Emotion Master',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: kYellow,
+                              )),
                         ),
                       ],
                     ),
@@ -231,7 +237,7 @@ class MirrorTalkResultScreen extends StatelessWidget {
 
             const SizedBox(height: 14),
 
-            // ── Play again / Next game buttons ───────────────────────
+            // ── Buttons ────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
               child: Row(
@@ -250,16 +256,12 @@ class MirrorTalkResultScreen extends StatelessWidget {
                           foregroundColor: kHeader,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
+                              borderRadius: BorderRadius.circular(14)),
                         ),
-                        child: const Text(
-                          'Play again',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+                        child: const Text('Play again',
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700)),
                       ),
                     ),
                   ),
@@ -274,16 +276,12 @@ class MirrorTalkResultScreen extends StatelessWidget {
                           foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
+                              borderRadius: BorderRadius.circular(14)),
                         ),
-                        child: const Text(
-                          'Next game →',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+                        child: const Text('Next game →',
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700)),
                       ),
                     ),
                   ),
@@ -296,7 +294,6 @@ class MirrorTalkResultScreen extends StatelessWidget {
     );
   }
 
-  // ── Header ─────────────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
@@ -304,47 +301,27 @@ class MirrorTalkResultScreen extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 56, 24, 28),
       child: Column(
         children: [
-          // Trophy icon
           Container(
-            width: 80,
-            height: 80,
+            width: 80, height: 80,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: const Color(0xFF3A0870),
-              border: Border.all(
-                  color: kYellow.withOpacity(0.35), width: 1.5),
+              border:
+                  Border.all(color: kYellow.withOpacity(0.35), width: 1.5),
             ),
-            child: const Icon(
-              Icons.emoji_events_rounded,
-              color: kYellow,
-              size: 40,
-            ),
+            child: const Icon(Icons.emoji_events_rounded,
+                color: kYellow, size: 40),
           ),
-
           const SizedBox(height: 14),
-
-          const Text(
-            'You nailed it!',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
-
+          const Text('You nailed it!',
+              style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white)),
           const SizedBox(height: 4),
-
-          const Text(
-            'Mirror Talk · All 5 rounds complete',
-            style: TextStyle(
-              fontSize: 12,
-              color: kSubtitle,
-            ),
-          ),
-
+          const Text('Mirror Talk · All 5 rounds complete',
+              style: TextStyle(fontSize: 12, color: kSubtitle)),
           const SizedBox(height: 16),
-
-          // Score badge
           Container(
             padding: const EdgeInsets.symmetric(
                 horizontal: 28, vertical: 10),
@@ -355,24 +332,19 @@ class MirrorTalkResultScreen extends StatelessWidget {
                   color: kYellow.withOpacity(0.3), width: 1.5),
             ),
             child: Column(
-              children: const [
+              children: [
                 Text(
-                  '76%',
-                  style: TextStyle(
+                  hasRealData ? '$overallScore%' : 'No mic',
+                  style: const TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.w700,
                     color: kYellow,
                     height: 1.0,
                   ),
                 ),
-                SizedBox(height: 2),
-                Text(
-                  'Overall expression score',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: kSubtitle,
-                  ),
-                ),
+                const SizedBox(height: 2),
+                const Text('Overall expression score',
+                    style: TextStyle(fontSize: 10, color: kSubtitle)),
               ],
             ),
           ),
@@ -380,9 +352,15 @@ class MirrorTalkResultScreen extends StatelessWidget {
       ),
     );
   }
+
+  int _starsForScore(int score) {
+    if (score >= 80) return 3;
+    if (score >= 50) return 2;
+    if (score > 0)   return 1;
+    return 0;
+  }
 }
 
-// ── Round row ──────────────────────────────────────────────────────────────────
 class _RoundRow extends StatelessWidget {
   final int number;
   final String emotion;
@@ -392,87 +370,62 @@ class _RoundRow extends StatelessWidget {
   final int stars;
 
   const _RoundRow({
-    required this.number,
-    required this.emotion,
-    required this.fill,
-    required this.percent,
-    required this.barColor,
-    required this.stars,
+    required this.number, required this.emotion, required this.fill,
+    required this.percent, required this.barColor, required this.stars,
   });
 
-  static const Color kPrimary = Color(0xFF5300AC);
-  static const Color kBarBg   = Color(0xFFF0E8FF);
-  static const Color kYellow  = Color(0xFFD9E366);
+  static const Color kYellow = Color(0xFFD9E366);
   static const Color kStarOff = Color(0xFFEDE0F8);
+  static const Color kBarBg   = Color(0xFFF0E8FF);
+  static const Color kPrimary = Color(0xFF5300AC);
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        // Number badge
         Container(
-          width: 22,
-          height: 22,
-          decoration: const BoxDecoration(
-            color: kBarBg,
-            shape: BoxShape.circle,
-          ),
+          width: 22, height: 22,
+          decoration: const BoxDecoration(color: kBarBg, shape: BoxShape.circle),
           child: Center(
-            child: Text(
-              '$number',
-              style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: kPrimary,
-              ),
-            ),
+            child: Text('$number',
+                style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: kPrimary)),
           ),
         ),
         const SizedBox(width: 8),
-        // Emotion label
         SizedBox(
-          width: 68,
-          child: Text(
-            emotion,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF290451),
-            ),
-          ),
+          width: 72,
+          child: Text(emotion,
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF290451))),
         ),
-        // Progress bar
         Expanded(
           child: ClipRRect(
             borderRadius: BorderRadius.circular(60),
             child: LinearProgressIndicator(
-              value: fill,
-              minHeight: 7,
+              value: fill, minHeight: 7,
               backgroundColor: kBarBg,
               valueColor: AlwaysStoppedAnimation<Color>(barColor),
             ),
           ),
         ),
         const SizedBox(width: 8),
-        // Percent
         SizedBox(
           width: 34,
-          child: Text(
-            percent,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: barColor,
-            ),
-          ),
+          child: Text(percent,
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: barColor)),
         ),
-        // Stars
         Row(
-          children: List.generate(3, (i) => Icon(
-            Icons.star_rounded,
-            size: 12,
-            color: i < stars ? kYellow : kStarOff,
-          )),
+          children: List.generate(3, (i) => Icon(Icons.star_rounded,
+              size: 12,
+              color: i < stars ? kYellow : kStarOff)),
         ),
       ],
     );

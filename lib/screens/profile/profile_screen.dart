@@ -3,6 +3,7 @@ import '../../core/app_nav.dart';
 import '../../main.dart';
 import '../../core/auth_service.dart';
 import '../../core/app_flushbar.dart';
+import '../../services/api_service.dart';
 import '../auth/login_screen.dart';
 import '../onboarding/avatar_picker_screen.dart';
 
@@ -22,6 +23,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late String _name;
   String _language = 'English';
 
+  // ── Real stats from session history ───────────────────────────────────────
+  int    _sessionCount = 0;
+  int    _avgScore     = 0;
+  int    _dayStreak    = 0;
+  bool   _statsLoaded  = false;
+
   static const List<String> _languages = [
     'English', 'Urdu', 'Arabic', 'French', 'Spanish', 'German'
   ];
@@ -31,11 +38,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    // Sync notifier with current user on screen open
     AuthService.syncDisplayName();
     _name = AuthService.displayNameNotifier.value;
-    // Listen for name changes from any screen
     AuthService.displayNameNotifier.addListener(_onNameChanged);
+    _loadStats();
+  }
+
+  Future<void> _loadStats() async {
+    try {
+      final sessions = await ApiService.getSessions();
+      if (!mounted) return;
+      setState(() {
+        _sessionCount = sessions.length;
+        _avgScore     = _computeAvgScore(sessions);
+        _dayStreak    = _computeDayStreak(sessions);
+        _statsLoaded  = true;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _statsLoaded = true);
+    }
+  }
+
+  int _computeAvgScore(List<Map<String, dynamic>> sessions) {
+    if (sessions.isEmpty) return 0;
+    final scores = sessions
+        .map((s) => (s['fluencyScore'] as num?)?.toInt())
+        .whereType<int>()
+        .toList();
+    if (scores.isEmpty) return 0;
+    return scores.reduce((a, b) => a + b) ~/ scores.length;
+  }
+
+  int _computeDayStreak(List<Map<String, dynamic>> sessions) {
+    if (sessions.isEmpty) return 0;
+    final dates = sessions
+        .map((s) {
+          final raw = s['createdAt'] as String?;
+          if (raw == null) return null;
+          final dt = DateTime.tryParse(raw);
+          if (dt == null) return null;
+          return DateTime(dt.year, dt.month, dt.day);
+        })
+        .whereType<DateTime>()
+        .toSet()
+        .toList()
+      ..sort((a, b) => b.compareTo(a));
+    if (dates.isEmpty) return 0;
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    if (todayDate.difference(dates.first).inDays > 1) return 0;
+    int streak = 1;
+    for (int i = 0; i < dates.length - 1; i++) {
+      if (dates[i].difference(dates[i + 1]).inDays == 1) {
+        streak++;
+      } else if (dates[i].difference(dates[i + 1]).inDays > 1) {
+        break;
+      }
+    }
+    return streak;
   }
 
   void _onNameChanged() {
@@ -77,15 +137,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
               // ── Stats row ──────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    _StatChip(value: '12', label: 'Sessions'),
-                    const SizedBox(width: 10),
-                    _StatChip(value: '74%', label: 'Avg Score'),
-                    const SizedBox(width: 10),
-                    _StatChip(value: '7', label: 'Day Streak', accent: kYellow),
-                  ],
-                ),
+                child: _statsLoaded
+                    ? Row(
+                        children: [
+                          _StatChip(
+                            value: '$_sessionCount',
+                            label: 'Sessions',
+                          ),
+                          const SizedBox(width: 10),
+                          _StatChip(
+                            value: _avgScore > 0 ? '$_avgScore%' : '—',
+                            label: 'Avg Score',
+                          ),
+                          const SizedBox(width: 10),
+                          _StatChip(
+                            value: '$_dayStreak',
+                            label: 'Day Streak',
+                            accent: kYellow,
+                          ),
+                        ],
+                      )
+                    : const SizedBox(
+                        height: 64,
+                        child: Center(
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: kPrimary,
+                            ),
+                          ),
+                        ),
+                      ),
               ),
 
               const SizedBox(height: 20),

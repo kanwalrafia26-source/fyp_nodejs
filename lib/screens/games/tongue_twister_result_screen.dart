@@ -3,7 +3,16 @@ import 'speakquest_screen.dart';
 import 'tongue_twister_screen.dart';
 
 class TongueTwisterResultScreen extends StatelessWidget {
-  const TongueTwisterResultScreen({super.key});
+  final List<Map<String, dynamic>> attempts;
+  final int bestScore;
+  final bool hasRealData;
+
+  const TongueTwisterResultScreen({
+    super.key,
+    required this.attempts,
+    required this.bestScore,
+    required this.hasRealData,
+  });
 
   static const Color kBg       = Color(0xFF290451);
   static const Color kCardBg   = Color(0xFFFAF6FF);
@@ -16,50 +25,59 @@ class TongueTwisterResultScreen extends StatelessWidget {
   static const Color kOrange   = Color(0xFFC07030);
   static const Color kCardBdr  = Color(0xFFEDE0FF);
 
-  // Try results: (label, score, isBest)
-  static const _tries = [
-    ('Try 1', '91%', false),
-    ('Try 2', '94%', true),
-    ('Try 3', '88%', false),
-  ];
+  int get _bestIndex {
+    if (attempts.isEmpty) return 0;
+    int best = 0;
+    for (int i = 1; i < attempts.length; i++) {
+      if ((attempts[i]['score'] as int) >
+          (attempts[best]['score'] as int)) {
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  List<String> get _mispronounced {
+    if (!hasRealData) return [];
+    // Collect low-confidence words from the best attempt
+    final best = _bestIndex < attempts.length ? attempts[_bestIndex] : null;
+    return (best?['lowConfidenceWords'] as List?)
+            ?.map((e) => e.toString())
+            .take(4)
+            .toList() ??
+        [];
+  }
 
   @override
   Widget build(BuildContext context) {
+    final mis = _mispronounced;
+
     return Scaffold(
       backgroundColor: kBg,
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // ── Dark header ──────────────────────────────────────────
             _buildHeader(),
 
-            // ── Light card section ───────────────────────────────────
             Container(
               width: double.infinity,
-              decoration: const BoxDecoration(
-                color: kCardBg,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(0),
-                  topRight: Radius.circular(0),
-                ),
-              ),
+              color: kCardBg,
               child: Column(
                 children: [
                   const SizedBox(height: 20),
 
-                  // ── Try cards row ──────────────────────────────────
+                  // ── Try cards ────────────────────────────────────────
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Row(
-                      children: List.generate(_tries.length, (i) {
-                        final t = _tries[i];
-                        final isBest = t.$3;
+                      children: List.generate(attempts.length, (i) {
+                        final score  = attempts[i]['score'] as int;
+                        final isBest = i == _bestIndex;
                         return Expanded(
                           child: Container(
-                            margin: EdgeInsets.only(
-                                right: i < 2 ? 10 : 0),
-                            padding: const EdgeInsets.symmetric(
-                                vertical: 12),
+                            margin:
+                                EdgeInsets.only(right: i < attempts.length - 1 ? 10 : 0),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                             decoration: BoxDecoration(
                               color: isBest ? kYellow : Colors.white,
                               borderRadius: BorderRadius.circular(14),
@@ -70,39 +88,33 @@ class TongueTwisterResultScreen extends StatelessWidget {
                             ),
                             child: Column(
                               children: [
-                                Text(
-                                  t.$1,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: isBest
-                                        ? FontWeight.w700
-                                        : FontWeight.w400,
-                                    color: isBest
-                                        ? const Color(0xFF3A4800)
-                                        : kSubtitle,
-                                  ),
-                                ),
+                                Text('Try ${i + 1}',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: isBest
+                                          ? FontWeight.w700
+                                          : FontWeight.w400,
+                                      color: isBest
+                                          ? const Color(0xFF3A4800)
+                                          : kSubtitle,
+                                    )),
                                 const SizedBox(height: 4),
                                 Text(
-                                  t.$2,
+                                  hasRealData ? '$score%' : '—',
                                   style: TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.w700,
-                                    color: isBest
-                                        ? kYellowDk
-                                        : kPurple,
+                                    color: isBest ? kYellowDk : kPurple,
                                   ),
                                 ),
                                 if (isBest) ...[
                                   const SizedBox(height: 2),
-                                  const Text(
-                                    'Best',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF3A4800),
-                                    ),
-                                  ),
+                                  const Text('Best',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF3A4800),
+                                      )),
                                 ],
                               ],
                             ),
@@ -114,90 +126,95 @@ class TongueTwisterResultScreen extends StatelessWidget {
 
                   const SizedBox(height: 14),
 
-                  // ── Words nailed card ──────────────────────────────
+                  // ── Words card ─────────────────────────────────────
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
-                        border:
-                            Border.all(color: kCardBdr, width: 1.5),
+                        border: Border.all(color: kCardBdr, width: 1.5),
                       ),
-                      padding: const EdgeInsets.fromLTRB(
-                          16, 14, 16, 16),
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Words nailed row
                           Row(
                             mainAxisAlignment:
                                 MainAxisAlignment.spaceBetween,
-                            children: const [
+                            children: [
+                              const Text('Pronunciation accuracy',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: kPrimary,
+                                  )),
                               Text(
-                                'Words nailed',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: kPrimary,
-                                ),
-                              ),
-                              Text(
-                                '12 / 14',
+                                hasRealData ? '$bestScore%' : '—',
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w700,
-                                  color: kGreen,
+                                  color: bestScore >= 75 ? kGreen : kOrange,
                                 ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 8),
-                          // Green progress bar
                           ClipRRect(
                             borderRadius: BorderRadius.circular(60),
-                            child: const LinearProgressIndicator(
-                              value: 12 / 14,
+                            child: LinearProgressIndicator(
+                              value: hasRealData ? bestScore / 100 : 0,
                               minHeight: 8,
-                              backgroundColor: Color(0xFFF0E8FF),
+                              backgroundColor:
+                                  const Color(0xFFF0E8FF),
                               valueColor: AlwaysStoppedAnimation<Color>(
-                                  kGreen),
+                                  bestScore >= 75 ? kGreen : kOrange),
                             ),
                           ),
-
-                          const SizedBox(height: 12),
-
-                          Divider(
-                              color: const Color(0xFFF0E8FF),
-                              thickness: 1),
-
-                          const SizedBox(height: 8),
-
-                          // Mispronounced label
-                          const Text(
-                            'Mispronounced',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: kSubtitle,
-                              letterSpacing: 0.5,
+                          if (mis.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            Divider(
+                                color: const Color(0xFFF0E8FF),
+                                thickness: 1),
+                            const SizedBox(height: 8),
+                            const Text('Low-confidence words',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: kSubtitle,
+                                  letterSpacing: 0.5,
+                                )),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 6,
+                              children: mis
+                                  .map((w) => Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10, vertical: 5),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFFF8F0),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        child: Text('"$w"',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight:
+                                                  FontWeight.w700,
+                                              color: Color(0xFFC07030),
+                                            )),
+                                      ))
+                                  .toList(),
                             ),
-                          ),
-
-                          const SizedBox(height: 8),
-
-                          // Mispronounced chips
-                          Row(
-                            children: [
-                              _MisChip(
-                                  word: '"lorry"',
-                                  hint: '→ LOR-ee ×2'),
-                              const SizedBox(width: 10),
-                              _MisChip(
-                                  word: '"yellow"',
-                                  hint: '→ YEL-oh ×1'),
-                            ],
-                          ),
+                          ] else if (!hasRealData) ...[
+                            const SizedBox(height: 10),
+                            const Text(
+                              'Grant mic permission for real word-level feedback.',
+                              style: TextStyle(
+                                  fontSize: 10, color: kSubtitle),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -205,7 +222,7 @@ class TongueTwisterResultScreen extends StatelessWidget {
 
                   const SizedBox(height: 14),
 
-                  // ── XP + Unlocked card ─────────────────────────────
+                  // ── XP card ────────────────────────────────────────
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Container(
@@ -223,36 +240,29 @@ class TongueTwisterResultScreen extends StatelessWidget {
                               crossAxisAlignment:
                                   CrossAxisAlignment.start,
                               children: const [
-                                Text(
-                                  'XP earned',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Color(0xFFC9A0E0),
-                                  ),
-                                ),
+                                Text('XP earned',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Color(0xFFC9A0E0),
+                                    )),
                                 SizedBox(height: 4),
-                                Text(
-                                  '+120 XP',
-                                  style: TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w700,
-                                    color: kYellow,
-                                  ),
-                                ),
+                                Text('+120 XP',
+                                    style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w700,
+                                      color: kYellow,
+                                    )),
                               ],
                             ),
                           ),
                           Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.end,
+                            crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              const Text(
-                                'Unlocked',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFFC9A0E0),
-                                ),
-                              ),
+                              const Text('Unlocked',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFFC9A0E0),
+                                  )),
                               const SizedBox(height: 6),
                               Container(
                                 padding: const EdgeInsets.symmetric(
@@ -265,14 +275,12 @@ class TongueTwisterResultScreen extends StatelessWidget {
                                       color: kYellow.withOpacity(0.3),
                                       width: 1),
                                 ),
-                                child: const Text(
-                                  'Level 4',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    color: kYellow,
-                                  ),
-                                ),
+                                child: const Text('Level 4',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: kYellow,
+                                    )),
                               ),
                             ],
                           ),
@@ -285,7 +293,8 @@ class TongueTwisterResultScreen extends StatelessWidget {
 
                   // ── Buttons ────────────────────────────────────────
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                    padding:
+                        const EdgeInsets.fromLTRB(20, 0, 20, 32),
                     child: Row(
                       children: [
                         Expanded(
@@ -305,17 +314,14 @@ class TongueTwisterResultScreen extends StatelessWidget {
                                 foregroundColor: kPrimary,
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(14),
-                                ),
+                                    borderRadius:
+                                        BorderRadius.circular(14)),
                               ),
-                              child: const Text(
-                                'Try level 2',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
+                              child: const Text('Try level 2',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  )),
                             ),
                           ),
                         ),
@@ -337,17 +343,14 @@ class TongueTwisterResultScreen extends StatelessWidget {
                                 foregroundColor: Colors.white,
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(14),
-                                ),
+                                    borderRadius:
+                                        BorderRadius.circular(14)),
                               ),
-                              child: const Text(
-                                'Next game →',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
+                              child: const Text('Next game →',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  )),
                             ),
                           ),
                         ),
@@ -363,7 +366,6 @@ class TongueTwisterResultScreen extends StatelessWidget {
     );
   }
 
-  // ── Header ─────────────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
@@ -371,127 +373,58 @@ class TongueTwisterResultScreen extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 52, 24, 28),
       child: Column(
         children: [
-          // Subtitle
-          const Text(
-            'Tongue Twister · Phrase 3 · Intermediate',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: kSubtitle),
-          ),
-
+          const Text('Tongue Twister · Level 3 · Intermediate',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: kSubtitle)),
           const SizedBox(height: 14),
-
-          // Trophy icon
           Container(
-            width: 76,
-            height: 76,
+            width: 76, height: 76,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: const Color(0xFF3A0870),
               border: Border.all(
                   color: kYellow.withOpacity(0.3), width: 1.5),
             ),
-            child: const Icon(
-              Icons.emoji_events_rounded,
-              color: kYellow,
-              size: 38,
-            ),
+            child: const Icon(Icons.emoji_events_rounded,
+                color: kYellow, size: 38),
           ),
-
           const SizedBox(height: 12),
-
-          const Text(
-            'Level cleared!',
-            style: TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
-
+          const Text('Level cleared!',
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              )),
           const SizedBox(height: 4),
-
-          const Text(
-            'Tongue Twister · Level 3 · Intermediate',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: kSubtitle),
-          ),
-
+          const Text('Tongue Twister · Level 3 · Intermediate',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: kSubtitle)),
           const SizedBox(height: 14),
-
-          // 3 stars
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(
-              3,
-              (_) => const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4),
-                child: Icon(Icons.star_rounded,
-                    color: kYellow, size: 28),
-              ),
-            ),
+            children: List.generate(3, (_) => const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 4),
+              child: Icon(Icons.star_rounded, color: kYellow, size: 28),
+            )),
           ),
-
           const SizedBox(height: 4),
-
-          // Big score
-          const Text(
-            '94%',
-            style: TextStyle(
+          Text(
+            hasRealData ? '$bestScore%' : '—',
+            style: const TextStyle(
               fontSize: 62,
               fontWeight: FontWeight.w700,
               color: kYellow,
               height: 1.1,
             ),
           ),
-
-          const Text(
-            'Best accuracy · Try 2',
-            style: TextStyle(fontSize: 12, color: kSubtitle),
+          Text(
+            hasRealData
+                ? 'Best accuracy · Try ${_bestIndex + 1}'
+                : 'Grant mic permission for real scores',
+            style: const TextStyle(fontSize: 12, color: kSubtitle),
           ),
-
           const SizedBox(height: 8),
         ],
-      ),
-    );
-  }
-}
-
-// ── Mispronounced chip ─────────────────────────────────────────────────────────
-class _MisChip extends StatelessWidget {
-  final String word;
-  final String hint;
-  const _MisChip({required this.word, required this.hint});
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-            horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFF8F0),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          children: [
-            Text(
-              word,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFFC07030),
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              hint,
-              style: const TextStyle(
-                fontSize: 10,
-                color: Color(0xFF9A70B0),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

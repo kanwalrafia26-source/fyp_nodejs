@@ -138,6 +138,7 @@ class _SessionActiveScreenState extends State<SessionActiveScreen>
           realFillerWordCount: analysis?['fillerWordCount'] as int?,
           realLongPauseCount: analysis?['longPauseCount'] as int?,
           realWpm: analysis?['wpm'] as int?,
+          realDurationSeconds: _seconds,
           realPaceStability: analysis?['paceStability'] as String?,
           realEmotionLabel: analysis?['emotionLabel'] as String?,
           realAnxietyScore: analysis?['anxietyScore'] as int?,
@@ -152,6 +153,8 @@ class _SessionActiveScreenState extends State<SessionActiveScreen>
           realPitchVariability: (analysis?['pitchVariability'] as num?)?.toDouble(),
           realJitterPercent: (analysis?['jitterPercent'] as num?)?.toDouble(),
           realShimmerPercent: (analysis?['shimmerPercent'] as num?)?.toDouble(),
+          realPitchMeanHz: (analysis?['pitchMeanHz'] as num?)?.toDouble(),
+          realEnergyDb: (analysis?['energyDb'] as num?)?.toDouble(),
           realFillerBreakdown: (analysis?['fillerBreakdown'] as Map?)
               ?.map((k, v) => MapEntry(k.toString(), v as int)),
           realLowConfidenceWords: (analysis?['lowConfidenceWords'] as List?)

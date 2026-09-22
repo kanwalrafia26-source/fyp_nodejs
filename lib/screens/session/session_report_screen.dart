@@ -19,6 +19,7 @@ class SessionReportScreen extends StatefulWidget {
   final int? realFillerWordCount;
   final int? realLongPauseCount;
   final int? realWpm;
+  final int? realDurationSeconds;
   final String? realPaceStability;
   final String? realEmotionLabel;
   final int? realAnxietyScore;
@@ -29,6 +30,8 @@ class SessionReportScreen extends StatefulWidget {
   final double? realPitchVariability;
   final double? realJitterPercent;
   final double? realShimmerPercent;
+  final double? realPitchMeanHz;
+  final double? realEnergyDb;
   final Map<String, int>? realFillerBreakdown;
   final List<String>? realLowConfidenceWords;
 
@@ -40,6 +43,7 @@ class SessionReportScreen extends StatefulWidget {
     this.realFillerWordCount,
     this.realLongPauseCount,
     this.realWpm,
+    this.realDurationSeconds,
     this.realPaceStability,
     this.realEmotionLabel,
     this.realAnxietyScore,
@@ -50,6 +54,8 @@ class SessionReportScreen extends StatefulWidget {
     this.realPitchVariability,
     this.realJitterPercent,
     this.realShimmerPercent,
+    this.realPitchMeanHz,
+    this.realEnergyDb,
     this.realFillerBreakdown,
     this.realLowConfidenceWords,
   });
@@ -95,6 +101,7 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
 
     final error = await ApiService.saveSession({
       'selectedAI': widget.selectedAI,
+      'durationSeconds': widget.realDurationSeconds ?? 0,
       'transcript': widget.realTranscript ?? '',
       'wpm': widget.realWpm,
       'longPauseCount': widget.realLongPauseCount,
@@ -253,7 +260,17 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
               onDetailTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                    builder: (_) => const VoiceAnalysisScreen()),
+                    builder: (_) => VoiceAnalysisScreen(
+                      realWpm:              widget.realWpm,
+                      realLongPauseCount:   widget.realLongPauseCount,
+                      realFillerWordCount:  widget.realFillerWordCount,
+                      realPitchMeanHz:      widget.realPitchMeanHz,
+                      realPitchVariability: widget.realPitchVariability,
+                      realEnergyDb:         widget.realEnergyDb,
+                      realJitterPercent:    widget.realJitterPercent,
+                      realShimmerPercent:   widget.realShimmerPercent,
+                      realPaceStability:    widget.realPaceStability,
+                    )),
               ),
               child: _buildVoiceContent(),
             ),
@@ -635,10 +652,20 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
   Widget _buildVoiceContent() {
     final wpm = widget.realWpm;
     final longPauses = widget.realLongPauseCount;
+    final pitchHz = widget.realPitchMeanHz;
+    final energyDb = widget.realEnergyDb;
+    final jitter = widget.realJitterPercent;
+    final shimmer = widget.realShimmerPercent;
 
     return Column(
       children: [
-        _BarMetric(label: 'Pitch',        value: '80%', fill: 0.80, color: kBarPurple),
+        _BarMetric(
+          label: 'Pitch',
+          value: pitchHz != null ? '${pitchHz.round()} Hz' : '80%',
+          // Rough visual scaling: typical conversational pitch ~80-300Hz
+          fill: pitchHz != null ? (pitchHz / 300).clamp(0.0, 1.0) : 0.80,
+          color: kBarPurple,
+        ),
         const SizedBox(height: 8),
         _BarMetric(
           label: 'Speed',
@@ -647,7 +674,13 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
           color: kBarYellow,
         ),
         const SizedBox(height: 8),
-        _BarMetric(label: 'Volume',       value: '80%', fill: 0.80, color: kBarPurple),
+        _BarMetric(
+          label: 'Volume',
+          value: energyDb != null ? '${energyDb.round()} dB' : '80%',
+          // Rough scaling: typical conversational speech ~50-75dB
+          fill: energyDb != null ? ((energyDb - 40) / 40).clamp(0.0, 1.0) : 0.80,
+          color: kBarPurple,
+        ),
         const SizedBox(height: 8),
         _BarMetric(
           label: 'Pauses',
@@ -658,11 +691,35 @@ class _SessionReportScreenState extends State<SessionReportScreen> {
           color: kBarOrange,
         ),
         const SizedBox(height: 8),
-        _BarMetricSub(label: 'Tone', sub: 'Jitter',   value: '80%', fill: 0.80, color: kBarOrange),
+        _BarMetricSub(
+          label: 'Tone',
+          sub: 'Jitter',
+          value: jitter != null ? '${jitter.toStringAsFixed(2)}%' : '80%',
+          // Reference: healthy voice jitter is typically <1.04%
+          fill: jitter != null ? (1 - (jitter / 3).clamp(0.0, 1.0)) : 0.80,
+          color: kBarOrange,
+        ),
         const SizedBox(height: 8),
-        _BarMetricSub(label: 'Tone', sub: 'Strained', value: '80%', fill: 0.80, color: kBarOrange),
+        _BarMetricSub(
+          label: 'Tone',
+          sub: 'Strained (shimmer)',
+          value: shimmer != null ? '${shimmer.toStringAsFixed(2)}%' : '80%',
+          // Reference: healthy voice shimmer is typically <3.81%
+          fill: shimmer != null ? (1 - (shimmer / 10).clamp(0.0, 1.0)) : 0.80,
+          color: kBarOrange,
+        ),
         const SizedBox(height: 8),
         _BarMetric(label: 'Articulation', value: '80%', fill: 0.80, color: kBarOrange),
+        if (pitchHz != null) ...[
+          const SizedBox(height: 8),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Articulation is a placeholder — not yet computed from real audio.',
+              style: TextStyle(fontSize: 9, color: kSubtitle),
+            ),
+          ),
+        ],
       ],
     );
   }

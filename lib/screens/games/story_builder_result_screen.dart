@@ -5,8 +5,73 @@ import 'package:share_plus/share_plus.dart';
 import 'story_builder_screen.dart';
 
 class StoryBuilderResultScreen extends StatelessWidget {
-  const StoryBuilderResultScreen({super.key});
+  /// Per-turn results collected during the game.
+  final List<Map<String, dynamic>> turnResults;
+  final int durationSeconds;
 
+  const StoryBuilderResultScreen({
+    super.key,
+    required this.turnResults,
+    required this.durationSeconds,
+  });
+
+  // ── Derived values ─────────────────────────────────────────────────────────
+  bool get _hasReal =>
+      turnResults.any((t) => t['hasRealData'] == true);
+
+  /// Join all real transcripts into one story paragraph.
+  String get _storyText {
+    final parts = turnResults
+        .where((t) => (t['transcript'] as String).isNotEmpty)
+        .map((t) => (t['transcript'] as String).trim())
+        .toList();
+    if (parts.isEmpty) return '(no speech captured)';
+    return parts.join(' ');
+  }
+
+  /// Average fluency score across turns that have real data.
+  int get _avgFluency {
+    final scores = turnResults
+        .where((t) => t['hasRealData'] == true)
+        .map((t) => t['fluencyScore'] as int)
+        .toList();
+    if (scores.isEmpty) return 0;
+    return scores.reduce((a, b) => a + b) ~/ scores.length;
+  }
+
+  /// Total filler words across all turns.
+  int get _totalFillers => turnResults
+      .map((t) => t['fillerWordCount'] as int)
+      .fold(0, (a, b) => a + b);
+
+  /// Most common pace stability label.
+  String get _overallPacing {
+    final stables = turnResults
+        .where((t) => t['paceStability'] == 'Stable')
+        .length;
+    if (turnResults.isEmpty) return '—';
+    return stables >= turnResults.length / 2 ? 'Stable' : 'Uneven';
+  }
+
+  /// XP: turns × 15 + avgFluency × 2 (not a tuned economy — just honest).
+  int get _xp => (turnResults.length * 15 + _avgFluency * 2)
+      .clamp(0, 500);
+
+  /// Badge tier based on avg fluency.
+  String get _badge {
+    if (_avgFluency >= 80) return 'Master Storyteller';
+    if (_avgFluency >= 65) return 'Storyteller';
+    if (_avgFluency >= 50) return 'Apprentice';
+    return 'Beginner';
+  }
+
+  String get _durationLabel {
+    final m = durationSeconds ~/ 60;
+    final s = durationSeconds % 60;
+    return m > 0 ? '${m}m ${s}s' : '${s}s';
+  }
+
+  // ── Colours ────────────────────────────────────────────────────────────────
   static const Color kBg       = Color(0xFFFAF6FF);
   static const Color kHeader   = Color(0xFF290451);
   static const Color kPrimary  = Color(0xFF290451);
@@ -18,7 +83,6 @@ class StoryBuilderResultScreen extends StatelessWidget {
   static const Color kOrange   = Color(0xFFC07030);
   static const Color kCardBdr  = Color(0xFFEDE0FF);
   static const Color kAICard   = Color(0xFF290451);
-  static const Color kXPCard   = Color(0xFF290451);
 
   @override
   Widget build(BuildContext context) {
@@ -27,12 +91,11 @@ class StoryBuilderResultScreen extends StatelessWidget {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // ── Dark header ──────────────────────────────────────────
             _buildHeader(),
 
             const SizedBox(height: 16),
 
-            // ── Your story card ──────────────────────────────────────
+            // ── Your story card ────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Container(
@@ -45,22 +108,18 @@ class StoryBuilderResultScreen extends StatelessWidget {
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
+                    const Text('YOUR STORY',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: kSubtitle,
+                          letterSpacing: 1.0,
+                        )),
+                    const SizedBox(height: 8),
                     Text(
-                      'YOUR STORY',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: kSubtitle,
-                        letterSpacing: 1.0,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      '"It was a stormy night when the lighthouse flickered. '
-                      'A sailor rowed to shore. Inside stood a woman who smiled '
-                      'and whispered — the sea always remembers."',
-                      style: TextStyle(
+                      '"$_storyText"',
+                      style: const TextStyle(
                         fontSize: 12,
                         fontStyle: FontStyle.italic,
                         color: kPrimary,
@@ -74,24 +133,24 @@ class StoryBuilderResultScreen extends StatelessWidget {
 
             const SizedBox(height: 12),
 
-            // ── Stats row ────────────────────────────────────────────
+            // ── Stats row ──────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 children: [
                   _StatCard(
-                    label: 'Best sentence',
-                    value: '96%',
-                    sub: 'Sentence 6',
+                    label: 'Avg Fluency',
+                    value: _hasReal ? '$_avgFluency%' : '—',
+                    sub: 'Score',
                     valueColor: kGreen,
                     subColor: kGreen,
                     bgColor: const Color(0xFFF0FFF4),
                   ),
                   const SizedBox(width: 10),
                   _StatCard(
-                    label: 'Weakest',
-                    value: '68%',
-                    sub: 'Sentence 2',
+                    label: 'Pacing',
+                    value: _hasReal ? _overallPacing : '—',
+                    sub: 'Overall',
                     valueColor: kOrange,
                     subColor: kOrange,
                     bgColor: const Color(0xFFFFF8F0),
@@ -99,7 +158,7 @@ class StoryBuilderResultScreen extends StatelessWidget {
                   const SizedBox(width: 10),
                   _StatCard(
                     label: 'Filler words',
-                    value: '3',
+                    value: _hasReal ? '$_totalFillers' : '—',
                     sub: 'Total',
                     valueColor: kPurple,
                     subColor: kPurple,
@@ -111,7 +170,7 @@ class StoryBuilderResultScreen extends StatelessWidget {
 
             const SizedBox(height: 12),
 
-            // ── AI Insight card ──────────────────────────────────────
+            // ── AI insight card ────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Container(
@@ -123,24 +182,25 @@ class StoryBuilderResultScreen extends StatelessWidget {
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
+                    const Text('AI INSIGHT',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFC9A0E0),
+                          letterSpacing: 1.0,
+                        )),
+                    const SizedBox(height: 6),
                     Text(
-                      'AI INSIGHT',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFFC9A0E0),
-                        letterSpacing: 1.0,
-                      ),
-                    ),
-                    SizedBox(height: 6),
-                    Text(
-                      '"Great rhythm from sentence 3 onwards. Keep it up!"',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.white,
-                        height: 1.5,
-                      ),
+                      _hasReal
+                          ? '"Avg fluency $_avgFluency% across ${turnResults.length} turns'
+                              ' · $_totalFillers filler word${_totalFillers == 1 ? '' : 's'}'
+                              ' · Pacing: $_overallPacing. Keep the narrative flowing!"'
+                          : '"Complete turns with your mic on for real AI insights."',
+                      style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.white,
+                          height: 1.5),
                     ),
                   ],
                 ),
@@ -149,14 +209,14 @@ class StoryBuilderResultScreen extends StatelessWidget {
 
             const SizedBox(height: 12),
 
-            // ── XP + Badge card ──────────────────────────────────────
+            // ── XP + Badge card ────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Container(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 20, vertical: 16),
                 decoration: BoxDecoration(
-                  color: kXPCard,
+                  color: kAICard,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(
@@ -165,36 +225,38 @@ class StoryBuilderResultScreen extends StatelessWidget {
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text(
-                            'XP earned',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Color(0xFFC9A0E0),
+                        children: [
+                          const Text('XP earned',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFFC9A0E0))),
+                          const SizedBox(height: 4),
+                          Text('+$_xp XP',
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                                color: kYellow,
+                              )),
+                          if (!_hasReal)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 4),
+                              child: Text(
+                                'Grant mic for real XP',
+                                style: TextStyle(
+                                    fontSize: 9,
+                                    color: Color(0xFF9A70B0)),
+                              ),
                             ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            '+200 XP',
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
-                              color: kYellow,
-                            ),
-                          ),
                         ],
                       ),
                     ),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text(
-                          'Badge unlocked',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFFC9A0E0),
-                          ),
-                        ),
+                        const Text('Badge',
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFFC9A0E0))),
                         const SizedBox(height: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -203,16 +265,15 @@ class StoryBuilderResultScreen extends StatelessWidget {
                             color: kPurple,
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                                color: kYellow.withOpacity(0.3), width: 1),
+                                color: kYellow.withOpacity(0.3),
+                                width: 1),
                           ),
-                          child: const Text(
-                            'Storyteller',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: kYellow,
-                            ),
-                          ),
+                          child: Text(_badge,
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: kYellow,
+                              )),
                         ),
                       ],
                     ),
@@ -223,7 +284,7 @@ class StoryBuilderResultScreen extends StatelessWidget {
 
             const SizedBox(height: 14),
 
-            // ── Buttons ──────────────────────────────────────────────
+            // ── Buttons ────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
               child: Row(
@@ -243,16 +304,12 @@ class StoryBuilderResultScreen extends StatelessWidget {
                           foregroundColor: kPrimary,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
+                              borderRadius: BorderRadius.circular(14)),
                         ),
-                        child: const Text(
-                          'New story',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+                        child: const Text('New story',
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700)),
                       ),
                     ),
                   ),
@@ -262,26 +319,23 @@ class StoryBuilderResultScreen extends StatelessWidget {
                       height: 50,
                       child: ElevatedButton(
                         onPressed: () async {
-                          const storyText =
-                              '"It was a stormy night when the lighthouse flickered. '
-                              'A sailor rowed to shore. Inside stood a woman who smiled '
-                              'and whispered — the sea always remembers."';
-                          const shareText =
-                              'My story from Speakora 🎙️\n\n$storyText';
-
-                          // Windows desktop — share_plus not supported, copy to clipboard
+                          final shareText =
+                              'My story from Speakora 🎙️\n\n"$_storyText"';
                           final isDesktop = !kIsWeb &&
-                              (defaultTargetPlatform == TargetPlatform.windows ||
-                               defaultTargetPlatform == TargetPlatform.linux ||
-                               defaultTargetPlatform == TargetPlatform.macOS);
-
+                              (defaultTargetPlatform ==
+                                      TargetPlatform.windows ||
+                                  defaultTargetPlatform ==
+                                      TargetPlatform.linux ||
+                                  defaultTargetPlatform ==
+                                      TargetPlatform.macOS);
                           if (isDesktop) {
                             await Clipboard.setData(
-                                const ClipboardData(text: shareText));
+                                ClipboardData(text: shareText));
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Story copied to clipboard!'),
+                                  content:
+                                      Text('Story copied to clipboard!'),
                                   duration: Duration(seconds: 2),
                                 ),
                               );
@@ -296,16 +350,12 @@ class StoryBuilderResultScreen extends StatelessWidget {
                           foregroundColor: kYellowDk,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
+                              borderRadius: BorderRadius.circular(14)),
                         ),
-                        child: const Text(
-                          'Share story',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+                        child: const Text('Share story',
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700)),
                       ),
                     ),
                   ),
@@ -318,7 +368,6 @@ class StoryBuilderResultScreen extends StatelessWidget {
     );
   }
 
-  // ── Header ─────────────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
@@ -332,44 +381,30 @@ class StoryBuilderResultScreen extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 56, 24, 32),
       child: Column(
         children: [
-          // Book icon
           Container(
-            width: 72,
-            height: 72,
+            width: 72, height: 72,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: const Color(0xFF3A0870),
               border: Border.all(
                   color: kYellow.withOpacity(0.3), width: 1.5),
             ),
-            child: const Icon(
-              Icons.menu_book_rounded,
-              color: kYellow,
-              size: 36,
-            ),
+            child: const Icon(Icons.menu_book_rounded,
+                color: kYellow, size: 36),
           ),
-
           const SizedBox(height: 14),
-
-          const Text(
-            'Story complete!',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
-
+          const Text('Story complete!',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              )),
           const SizedBox(height: 4),
-
-          const Text(
-            '10 sentences · 3 min 24 sec',
-            style: TextStyle(fontSize: 12, color: kSubtitle),
+          Text(
+            '${turnResults.length} turns · $_durationLabel',
+            style: const TextStyle(fontSize: 12, color: kSubtitle),
           ),
-
           const SizedBox(height: 16),
-
-          // Score badge
           Container(
             padding: const EdgeInsets.symmetric(
                 horizontal: 24, vertical: 12),
@@ -382,9 +417,9 @@ class StoryBuilderResultScreen extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  '84%',
-                  style: TextStyle(
+                Text(
+                  _hasReal ? '$_avgFluency%' : '—',
+                  style: const TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
                     color: kYellow,
@@ -394,17 +429,13 @@ class StoryBuilderResultScreen extends StatelessWidget {
                 const SizedBox(width: 16),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
+                    const Text('Avg fluency',
+                        style: TextStyle(
+                            fontSize: 10, color: kSubtitle)),
                     Text(
-                      'Overall',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: kSubtitle,
-                      ),
-                    ),
-                    Text(
-                      'Excellent',
-                      style: TextStyle(
+                      _hasReal ? 'Live result' : 'No mic',
+                      style: const TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
                         color: kYellow,
@@ -423,23 +454,15 @@ class StoryBuilderResultScreen extends StatelessWidget {
 
 // ── Stat card ──────────────────────────────────────────────────────────────────
 class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final String sub;
-  final Color valueColor;
-  final Color subColor;
-  final Color bgColor;
-
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.sub,
-    required this.valueColor,
-    required this.subColor,
-    required this.bgColor,
-  });
+  final String label, value, sub;
+  final Color valueColor, subColor, bgColor;
 
   static const Color kSubtitle = Color(0xFF9A70B0);
+
+  const _StatCard({
+    required this.label, required this.value, required this.sub,
+    required this.valueColor, required this.subColor, required this.bgColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -447,37 +470,24 @@ class _StatCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
         decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(14),
-        ),
+            color: bgColor, borderRadius: BorderRadius.circular(14)),
         child: Column(
           children: [
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 10,
-                color: kSubtitle,
-              ),
-            ),
+            Text(label,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 10, color: kSubtitle)),
             const SizedBox(height: 4),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: valueColor,
-              ),
-            ),
+            Text(value,
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: valueColor)),
             const SizedBox(height: 2),
-            Text(
-              sub,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: subColor,
-              ),
-            ),
+            Text(sub,
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: subColor)),
           ],
         ),
       ),

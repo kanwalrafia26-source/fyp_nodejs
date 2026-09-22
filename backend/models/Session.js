@@ -7,6 +7,10 @@ const sessionSchema = new mongoose.Schema({
     required: true,
   },
   selectedAI: { type: Number, default: 2 }, // 0=Coach, 1=Therapist, 2=Both
+  sessionType: { type: String, default: 'practice' }, // 'practice' | 'simulation'
+  scenarioName: { type: String, default: '' },         // simulation only
+  roleName: { type: String, default: '' },             // simulation only
+  difficulty: { type: String, default: '' },           // simulation only
   durationSeconds: { type: Number, default: 0 },
   transcript: { type: String, default: '' },
 

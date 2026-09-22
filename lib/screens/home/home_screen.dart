@@ -5,7 +5,7 @@ import '../games/speakquest_screen.dart';
 import '../progress/progress_screen.dart';
 import '../../core/app_nav.dart';
 import '../../core/auth_service.dart';
-import '../details/audio_test_screen.dart';
+import '../../services/api_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,6 +16,71 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _navIndex = 0;
+
+  // ── Real stats from session history ───────────────────────────────────────
+  int    _dayStreak     = 0;
+  int    _lastScore     = 0;   // most recent session's fluency score
+  bool   _statsLoaded   = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStats();
+  }
+
+  Future<void> _loadStats() async {
+    try {
+      final sessions = await ApiService.getSessions();
+      if (!mounted) return;
+
+      // Last score — most recent session with a fluency score
+      final lastWithScore = sessions.firstWhere(
+        (s) => s['fluencyScore'] != null,
+        orElse: () => {},
+      );
+      final lastScore = (lastWithScore['fluencyScore'] as num?)?.toInt() ?? 0;
+
+      // Day streak — same logic as Progress screen
+      final streak = _computeStreak(sessions);
+
+      setState(() {
+        _lastScore   = lastScore;
+        _dayStreak   = streak;
+        _statsLoaded = true;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _statsLoaded = true);
+    }
+  }
+
+  int _computeStreak(List<Map<String, dynamic>> sessions) {
+    if (sessions.isEmpty) return 0;
+    final dates = sessions
+        .map((s) {
+          final raw = s['createdAt'] as String?;
+          if (raw == null) return null;
+          final dt = DateTime.tryParse(raw);
+          if (dt == null) return null;
+          return DateTime(dt.year, dt.month, dt.day);
+        })
+        .whereType<DateTime>()
+        .toSet()
+        .toList()
+      ..sort((a, b) => b.compareTo(a));
+    if (dates.isEmpty) return 0;
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    if (todayDate.difference(dates.first).inDays > 1) return 0;
+    int streak = 1;
+    for (int i = 0; i < dates.length - 1; i++) {
+      if (dates[i].difference(dates[i + 1]).inDays == 1) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    return streak;
+  }
 
   // ── Colours ──────────────────────────────────────────────────────────────
   static const Color kBg         = Color(0xFFEFE8F8); // light lavender page bg
@@ -169,28 +234,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
 
                   const SizedBox(height: 20),
-
-                  // ── DEBUG: Audio test ───────────────────────────────────
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: OutlinedButton.icon(
-                      onPressed: () => Navigator.push(context,
-                          MaterialPageRoute(
-                              builder: (_) => const AudioTestScreen())),
-                      icon: const Icon(Icons.mic_rounded),
-                      label: const Text('🧪 Audio Pipeline Test'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF5300AC),
-                        side: const BorderSide(color: Color(0xFF5300AC)),
-                        minimumSize: const Size(double.infinity, 48),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
                 ],
               ),
             ),
@@ -266,19 +309,19 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: kStreakBg,
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: const Column(
+                    child: Column(
                       children: [
-                        Text('🔥', style: TextStyle(fontSize: 22)),
-                        SizedBox(height: 2),
+                        const Text('🔥', style: TextStyle(fontSize: 22)),
+                        const SizedBox(height: 2),
                         Text(
-                          '7 days',
-                          style: TextStyle(
+                          _statsLoaded ? '$_dayStreak day${_dayStreak == 1 ? '' : 's'}' : '—',
+                          style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
                           ),
                         ),
-                        Text(
+                        const Text(
                           'streak',
                           style: TextStyle(
                             fontSize: 11,
@@ -304,37 +347,33 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Row(
                   children: [
                     Container(
-                      width: 36,
-                      height: 36,
+                      width: 36, height: 36,
                       decoration: const BoxDecoration(
-                        color: kPrimary,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.mic_rounded,
-                        color: Color(0xFFC097D8),
-                        size: 18,
-                      ),
+                          color: kPrimary, shape: BoxShape.circle),
+                      child: const Icon(Icons.mic_rounded,
+                          color: Color(0xFFC097D8), size: 18),
                     ),
                     const SizedBox(width: 12),
-                    const Column(
+                    Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Last session score: 74%',
-                          style: TextStyle(
+                          _statsLoaded
+                              ? (_lastScore > 0
+                                  ? 'Last session score: $_lastScore%'
+                                  : 'No sessions yet — start one!')
+                              : 'Loading...',
+                          style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
                           ),
                         ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Tap to view full report ...',
+                        const SizedBox(height: 2),
+                        const Text(
+                          'Tap Progress to view history',
                           style: TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFFC097D8),
-                          ),
+                              fontSize: 12, color: Color(0xFFC097D8)),
                         ),
                       ],
                     ),

@@ -64,7 +64,7 @@ class _SupportScreenState extends State<SupportScreen> {
     return Scaffold(
       backgroundColor: kBg,
       body: SingleChildScrollView(
-          child: Column(
+        child: Column(
             children: [
               // ── Header ─────────────────────────────────────────────
               _buildHeader(),
@@ -177,7 +177,6 @@ class _SupportScreenState extends State<SupportScreen> {
             ],
           ),
         ),
-      ),
     );
   }
 
@@ -361,60 +360,6 @@ class _SupportScreenState extends State<SupportScreen> {
     );
   }
 
-  // ── Bottom nav ─────────────────────────────────────────────────────────────
-  Widget _buildBottomNav() {
-    final items = [
-      (Icons.home_outlined,         'Home'),
-      (Icons.show_chart_rounded,    'Progress'),
-      (Icons.headset_mic_outlined,  'Support'),
-      (Icons.person_outline_rounded,'Profile'),
-    ];
-
-    return Container(
-      decoration: const BoxDecoration(
-        color: kNavBg,
-        border: Border(top: BorderSide(color: Color(0xFFE0D6FF), width: 1)),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: List.generate(items.length, (i) {
-          final active = _navIndex == i;
-          final color  = active ? kNavActive : kNavInact;
-          return GestureDetector(
-            onTap: () => navigateTo(context, i),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(items[i].$1, color: color, size: 22),
-                const SizedBox(height: 3),
-                Text(
-                  items[i].$2,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight:
-                        active ? FontWeight.w700 : FontWeight.w400,
-                    color: color,
-                  ),
-                ),
-                if (active) ...[
-                  const SizedBox(height: 2),
-                  Container(
-                    width: 4,
-                    height: 4,
-                    decoration: const BoxDecoration(
-                      color: kNavActive,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          );
-        }),
-      ),
-    );
-  }
 }
 
 // ── Quick contact card ─────────────────────────────────────────────────────────

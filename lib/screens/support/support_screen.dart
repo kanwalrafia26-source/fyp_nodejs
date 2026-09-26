@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../core/app_nav.dart';
 import '../../core/auth_service.dart';
 import '../../services/api_service.dart';
 import '../../core/app_flushbar.dart';
@@ -15,7 +14,6 @@ class _SupportScreenState extends State<SupportScreen> {
   final _nameCtrl    = TextEditingController();
   final _emailCtrl   = TextEditingController();
   final _messageCtrl = TextEditingController();
-  int _navIndex      = 2;
   int _expandedFaq   = -1;
   bool _submitted    = false;
   bool _isLoading    = false;
@@ -29,9 +27,6 @@ class _SupportScreenState extends State<SupportScreen> {
   static const Color kCardBg   = Color(0xFFFFFFFF);
   static const Color kFieldBg  = Color(0xFFF3E8FF);
   static const Color kBorder   = Color(0xFFE0D6FF);
-  static const Color kNavBg    = Color(0xFFF0EAFF);
-  static const Color kNavActive= Color(0xFF5300AC);
-  static const Color kNavInact = Color(0xFFAAAAAA);
 
   static const _faqs = [
     (
@@ -68,9 +63,7 @@ class _SupportScreenState extends State<SupportScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kBg,
-      bottomNavigationBar: _buildBottomNav(),
-      body: SafeArea(
-        child: SingleChildScrollView(
+      body: SingleChildScrollView(
           child: Column(
             children: [
               // ── Header ─────────────────────────────────────────────

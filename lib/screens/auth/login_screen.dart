@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'signup_screen.dart';
 import 'forgot_password_screen.dart';
 import '../../core/auth_service.dart';
-import '../home/home_screen.dart';
+import '../main_screen.dart';
 import '../onboarding/profile_setup_screen.dart';
 import '../../core/app_flushbar.dart';
 
@@ -137,7 +137,7 @@ class _LoginScreenState extends State<LoginScreen>
       } else {
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          MaterialPageRoute(builder: (_) => const MainScreen()),
           (_) => false,
         );
       }
@@ -400,7 +400,7 @@ class _LoginScreenState extends State<LoginScreen>
                                     AuthService.syncDisplayName();
                                     Navigator.pushAndRemoveUntil(
                                       context,
-                                      MaterialPageRoute(builder: (_) => const HomeScreen()),
+                                      MaterialPageRoute(builder: (_) => const MainScreen()),
                                       (_) => false,
                                     );
                                   }

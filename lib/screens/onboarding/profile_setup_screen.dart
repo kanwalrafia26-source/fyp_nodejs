@@ -3,7 +3,7 @@ import 'avatar_picker_screen.dart';
 import '../details/mic_check_screen.dart';
 import 'date_picker_screen.dart';
 import '../../core/auth_service.dart';
-import '../home/home_screen.dart';
+import '../main_screen.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   const ProfileSetupScreen({super.key});
@@ -185,7 +185,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     if (!context.mounted) return;
                     Navigator.pushAndRemoveUntil(
                       context,
-                      MaterialPageRoute(builder: (_) => const HomeScreen()),
+                      MaterialPageRoute(builder: (_) => const MainScreen()),
                       (_) => false,
                     );
                   },

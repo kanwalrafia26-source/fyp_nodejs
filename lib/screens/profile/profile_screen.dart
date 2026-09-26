@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../core/app_nav.dart';
 import '../../main.dart';
 import '../../core/auth_service.dart';
 import '../../core/app_flushbar.dart';
@@ -15,7 +14,6 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  int _navIndex = 3;
   bool _notificationsOn = true;
   bool get _darkMode => themeModeNotifier.value == ThemeMode.dark;
 
@@ -115,16 +113,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   static const Color kYellow   = Color(0xFFD9E366);
 
   static const Color kSubtitle = Color(0xFF9A70B0);
-  static const Color kNavBg    = Color(0xFFF0EAFF);
-  static const Color kNavActive= Color(0xFF5300AC);
-  static const Color kNavInact = Color(0xFFAAAAAA);
   static const Color kRed      = Color(0xFFD05050);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kBg,
-      bottomNavigationBar: _buildBottomNav(),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Column(
@@ -251,7 +245,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _SettingsTile(
                 icon: Icons.help_outline_rounded,
                 label: 'Help & FAQ',
-                onTap: () => navigateTo(context, 3),
+                onTap: null,
               ),
               _SettingsTile(
                 icon: Icons.info_outline_rounded,
@@ -607,60 +601,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ── Bottom nav ─────────────────────────────────────────────────────────────
-  Widget _buildBottomNav() {
-    final items = [
-      (Icons.home_outlined,         'Home'),
-      (Icons.show_chart_rounded,    'Progress'),
-      (Icons.headset_mic_outlined,  'Support'),
-      (Icons.person_outline_rounded,'Profile'),
-    ];
-
-    return Container(
-      decoration: const BoxDecoration(
-        color: kNavBg,
-        border: Border(top: BorderSide(color: Color(0xFFE0D6FF), width: 1)),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: List.generate(items.length, (i) {
-          final active = _navIndex == i;
-          final color  = active ? kNavActive : kNavInact;
-          return GestureDetector(
-            onTap: () => navigateTo(context, i),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(items[i].$1, color: color, size: 22),
-                const SizedBox(height: 3),
-                Text(
-                  items[i].$2,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight:
-                        active ? FontWeight.w700 : FontWeight.w400,
-                    color: color,
-                  ),
-                ),
-                if (active) ...[
-                  const SizedBox(height: 2),
-                  Container(
-                    width: 4,
-                    height: 4,
-                    decoration: const BoxDecoration(
-                      color: kNavActive,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          );
-        }),
-      ),
-    );
-  }
 }
 
 // ── Stat chip ──────────────────────────────────────────────────────────────────

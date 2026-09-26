@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../core/app_nav.dart';
 import '../../services/api_service.dart';
 
 class ProgressScreen extends StatefulWidget {
@@ -10,9 +9,8 @@ class ProgressScreen extends StatefulWidget {
 }
 
 class _ProgressScreenState extends State<ProgressScreen> {
-  int _tabIndex    = 0; // 0=Last session, 1=Week, 2=Month, 3=6 months
-  int _skillTab    = 2; // 0=Coach, 1=Therapist, 2=Both (default)
-  int _navIndex    = 1; // Progress active
+  int _tabIndex    = 0;
+  int _skillTab    = 2;
 
   bool _loading = true;
   String? _error;
@@ -26,9 +24,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
   static const Color kCardBg   = Color(0xFFFFFFFF);
   static const Color kSubtitle = Color(0xFF999999);
   static const Color kAICard   = Color(0xFF290451);
-  static const Color kNavBg    = Color(0xFFF0EAFF);
-  static const Color kNavActive= Color(0xFF5B2DD9);
-  static const Color kNavInact = Color(0xFFAAAAAA);
 
   static const _tabs = ['Last session', 'Week', 'Month', '6 months'];
   static const _barColors = [
@@ -166,7 +161,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
     return Scaffold(
       backgroundColor: kBg,
-      bottomNavigationBar: _buildBottomNav(),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _loadSessions,
@@ -453,60 +447,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
     );
   }
 
-  // ── Bottom nav ─────────────────────────────────────────────────────────────
-  Widget _buildBottomNav() {
-    final items = [
-      (Icons.home_outlined,         'Home'),
-      (Icons.show_chart_rounded,    'Progress'),
-      (Icons.headset_mic_outlined,  'Support'),
-      (Icons.person_outline_rounded,'Profile'),
-    ];
-
-    return Container(
-      decoration: const BoxDecoration(
-        color: kNavBg,
-        border: Border(top: BorderSide(color: Color(0xFFE0D6FF), width: 1)),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: List.generate(items.length, (i) {
-          final active = _navIndex == i;
-          final color  = active ? kNavActive : kNavInact;
-          return GestureDetector(
-            onTap: () => navigateTo(context, i),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(items[i].$1, color: color, size: 22),
-                const SizedBox(height: 3),
-                Text(
-                  items[i].$2,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight:
-                        active ? FontWeight.w700 : FontWeight.w400,
-                    color: color,
-                  ),
-                ),
-                if (active) ...[
-                  const SizedBox(height: 2),
-                  Container(
-                    width: 4,
-                    height: 4,
-                    decoration: const BoxDecoration(
-                      color: kNavActive,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          );
-        }),
-      ),
-    );
-  }
 }
 
 // ── Stat card ──────────────────────────────────────────────────────────────────

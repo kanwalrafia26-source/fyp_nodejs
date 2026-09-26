@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../core/app_nav.dart';
 import '../../services/api_service.dart';
 import 'mirror_talk_screen.dart';
 import 'tongue_twister_screen.dart';
@@ -13,7 +12,6 @@ class SpeakQuestScreen extends StatefulWidget {
 }
 
 class _SpeakQuestScreenState extends State<SpeakQuestScreen> {
-  int _navIndex   = 1;
   int _selectedGame = 1;
 
   // ── Real XP from session history ───────────────────────────────────────────
@@ -71,7 +69,6 @@ class _SpeakQuestScreenState extends State<SpeakQuestScreen> {
   static const Color kSubtitle   = Color(0xFF9A70B0);
   static const Color kCardWhite  = Color(0xFFFFFFFF);
   static const Color kCardPurple = Color(0xFF5300AC);
-  static const Color kNavActive  = Color(0xFF290451);
   static const Color kNavInactive= Color(0xFFC0A0D8);
   static const Color kProgressBg = Color(0x1AFFFFFF); // rgba(255,255,255,0.1)
 
@@ -79,7 +76,6 @@ class _SpeakQuestScreenState extends State<SpeakQuestScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kBg,
-      bottomNavigationBar: _buildBottomNav(),
       body: Column(
         children: [
           // ── Header ──────────────────────────────────────────────────
@@ -393,61 +389,6 @@ class _SpeakQuestScreenState extends State<SpeakQuestScreen> {
     );
   }
 
-  // ── Bottom nav ───────────────────────────────────────────────────────────────
-  Widget _buildBottomNav() {
-    final items = [
-      (Icons.home_outlined,        'Home'),
-      (Icons.show_chart_rounded,   'Progress'),
-      (Icons.headset_mic_outlined, 'Support'),
-      (Icons.person_outline_rounded,'Profile'),
-    ];
-
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Color(0xFFF0E8FF), width: 1)),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: List.generate(items.length, (i) {
-          final active = _navIndex == i;
-          final color  = active ? kNavActive : kNavInactive;
-          return GestureDetector(
-            onTap: () => navigateTo(context, i),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(items[i].$1, color: color, size: 22),
-                const SizedBox(height: 3),
-                Text(
-                  items[i].$2,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: active
-                        ? FontWeight.w700
-                        : FontWeight.w400,
-                    color: color,
-                  ),
-                ),
-                if (active) ...[
-                  const SizedBox(height: 2),
-                  Container(
-                    width: 4,
-                    height: 4,
-                    decoration: const BoxDecoration(
-                      color: kNavActive,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          );
-        }),
-      ),
-    );
-  }
 }
 
 // ── Game card ──────────────────────────────────────────────────────────────────

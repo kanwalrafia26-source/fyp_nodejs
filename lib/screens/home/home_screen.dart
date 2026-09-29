@@ -6,7 +6,12 @@ import '../../core/auth_service.dart';
 import '../../services/api_service.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final VoidCallback? onProgressTap;
+
+  const HomeScreen({
+    super.key,
+    this.onProgressTap,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -163,14 +168,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      // Progress card — just a visual card, no navigation
-                      // (Progress is a bottom-nav tab in MainScreen)
-                      const Expanded(
-                        child: _PracticeCard(
-                          icon: Icons.show_chart_rounded,
-                          iconColor: Colors.blue,
-                          title: 'Progress',
-                          subtitle: 'Your growth chart',
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: widget.onProgressTap,
+                          child: const _PracticeCard(
+                            icon: Icons.show_chart_rounded,
+                            iconColor: Colors.blue,
+                            title: 'Progress',
+                            subtitle: 'Your growth chart',
+                          ),
                         ),
                       ),
                     ],

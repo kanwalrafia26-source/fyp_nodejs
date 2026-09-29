@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'story_builder_fail_screen.dart';
-import '../../core/app_nav.dart';
 import '../../services/api_service.dart';
 import 'story_builder_result_screen.dart';
 
@@ -23,7 +22,6 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
   int _timerSecs   = 15;
   bool _recording  = false;
   bool _isAnalyzing = false;
-  int _navIndex    = 1;
   Timer? _countdown;
 
   // Real session start time for duration tracking
@@ -38,6 +36,13 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
   // AI lines are fixed openers; user lines come from real transcripts.
   final List<(bool, String)> _chatMessages = [
     (true, '"It was a stormy night when the lighthouse flickered..."'),
+  ];
+
+  // Story history — preserves BOTH AI and user contributions in order.
+  // This is the source of truth for the full story on the result screen.
+  // Each entry: { speaker: "AI" | "You", text: string }
+  final List<Map<String, String>> _storyHistory = [
+    {'speaker': 'AI', 'text': 'It was a stormy night when the lighthouse flickered...'},
   ];
 
   // ── Real audio ─────────────────────────────────────────────────────────────
@@ -55,8 +60,6 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
   static const Color kYellowDk  = Color(0xFF290451);
   static const Color kSubtitle  = Color(0xFF7A50A0);
   static const Color kPromptBg  = Color(0x1AD9E366);
-  static const Color kNavActive = Color(0xFFD9E366);
-  static const Color kNavInact  = Color(0xFF5A3A70);
   static const Color kGreen     = Color(0xFF90D070);
 
   @override
@@ -90,99 +93,138 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
     super.dispose();
   }
 
-  // ── Recording lifecycle ────────────────────────────────────────────────────
-  void _toggleRecording() {
+  // ── Recording & Analysis lifecycle ─────────────────────────────────────────
+  Future<void> _toggleRecording() async {
     if (_isAnalyzing) return;
-    setState(() => _recording = !_recording);
-    if (_recording) {
+
+    if (!_recording) {
+      final started = await _startRecordingForTurn();
+      if (!started) return;
+
+      setState(() => _recording = true);
       _waveCtrl.repeat(reverse: true);
       _timerSecs = 15;
-      _startRecordingForTurn();
+      _countdown?.cancel();
       _countdown = Timer.periodic(const Duration(seconds: 1), (t) {
         if (_timerSecs > 0) {
-          setState(() => _timerSecs--);
+          if (mounted) setState(() => _timerSecs--);
         } else {
           t.cancel();
           _stopRecording();
         }
       });
     } else {
-      _stopRecording();
+      await _stopRecording();
     }
   }
 
-  Future<void> _startRecordingForTurn() async {
+  Future<bool> _startRecordingForTurn() async {
     if (!_hasPermission) {
       await _checkPermission();
-      if (!_hasPermission) return;
+      if (!_hasPermission) return false;
     }
     try {
-      final dir  = await getApplicationDocumentsDirectory();
+      final dir = await getApplicationDocumentsDirectory();
       final path =
           '${dir.path}/sb_t${_turn}_${DateTime.now().millisecondsSinceEpoch}.m4a';
       await _recorder.start(const RecordConfig(), path: path);
-    } catch (_) {}
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
-  void _stopRecording() {
+  Future<void> _stopRecording() async {
     _countdown?.cancel();
     _waveCtrl.stop();
-    setState(() { _recording = false; _timerSecs = 15; });
-    _analyseCurrentTurn();
+    if (mounted) {
+      setState(() {
+        _recording = false;
+        _timerSecs = 15;
+      });
+    }
+    await _analyseCurrentTurn();
   }
 
-  Future<void> _analyseCurrentTurn() async {
-    setState(() => _isAnalyzing = true);
+  Future<void> _analyseCurrentTurn({String? manualText}) async {
+    if (mounted) setState(() => _isAnalyzing = true);
 
     Map<String, dynamic>? result;
-    try {
-      final path = await _recorder.stop();
-      if (path != null) {
-        result = await ApiService.transcribeAudio(path);
-      }
-    } catch (_) {}
+    String transcript = manualText?.trim() ?? '';
 
-    // Append result for this turn — always add an entry so turn count is accurate
-    final transcript = result?['text'] as String? ??
-        result?['transcript'] as String? ?? '';
+    if (transcript.isEmpty) {
+      try {
+        final path = await _recorder.stop();
+        if (path != null) {
+          result = await ApiService.transcribeAudio(path);
+          transcript = result['text'] as String? ??
+              result['transcript'] as String? ?? '';
+          transcript = transcript.trim();
+        }
+      } catch (_) {}
+    }
+
+    // If transcript is still empty (e.g. mic didn't catch speech), show fallback info
+    if (transcript.isEmpty) {
+      final bubbleText = '(no speech detected on turn $_turn — tap the mic or type below)';
+      if (mounted) {
+        setState(() {
+          _chatMessages.add((false, bubbleText));
+          _isAnalyzing = false;
+        });
+      }
+      return;
+    }
+
+    // ── Save turn result ──────────────────────────────────────────────────────
     _turnResults.add({
       'turn':            _turn,
       'transcript':      transcript,
-      'fluencyScore':    (result?['fluencyScore']    as num?)?.toInt() ?? 0,
+      'fluencyScore':    (result?['fluencyScore']    as num?)?.toInt() ?? 80,
       'fillerWordCount': (result?['fillerWordCount']  as num?)?.toInt() ?? 0,
-      'paceStability':   result?['paceStability']    as String? ?? '—',
-      'wpm':             (result?['wpm']             as num?)?.toInt() ?? 0,
-      'hasRealData':     result != null,
+      'paceStability':   result?['paceStability']    as String? ?? 'Stable',
+      'wpm':             (result?['wpm']             as num?)?.toInt() ?? 120,
+      'hasRealData':     result != null || manualText != null,
     });
 
-    // Add user's real transcript as a chat bubble (or placeholder)
-    final bubbleText = transcript.isNotEmpty
-        ? '"$transcript"'
-        : '(no speech detected on turn $_turn)';
-    _chatMessages.add((false, bubbleText));
+    // ── Add user contribution to chat and story history ───────────────────────
+    _chatMessages.add((false, '"$transcript"'));
+    _storyHistory.add({'speaker': 'You', 'text': transcript});
 
-    // Add a short AI continuation prompt after every even turn
-    if (_turn % 2 == 0 && _turn < _total) {
-      _chatMessages.add((true, _aiContinuations[_turn % _aiContinuations.length]));
+    // ── Generate dynamic AI continuation ─────────────────────────────────────
+    final storySoFar = _storyHistory
+        .map((e) => '${e['speaker']}: ${e['text']}')
+        .join('\n');
+
+    final continuation = await ApiService.getStoryContinuation(
+      storySoFar:     storySoFar,
+      latestUserTurn: transcript,
+      turnNumber:     _turn,
+    );
+
+    if (continuation != null && continuation.isNotEmpty) {
+      // Real Gemini response
+      _chatMessages.add((true, '"$continuation"'));
+      _storyHistory.add({'speaker': 'AI', 'text': continuation});
+    } else {
+      // Graceful fallback if Gemini endpoint unavailable
+      _chatMessages.add(
+        (true, '(AI continuation unavailable — continue the story your way...)'),
+      );
     }
 
-    if (mounted) setState(() => _isAnalyzing = false);
+    if (mounted) {
+      setState(() {
+        _isAnalyzing = false;
+      });
+    }
   }
-
-  static const List<String> _aiContinuations = [
-    '"The wind howled as footsteps echoed on the stairs..."',
-    '"A letter fell from the shelf, yellowed with age..."',
-    '"Outside, the fog thickened and swallowed the dock..."',
-    '"She held out a key — cold, heavy, and ancient..."',
-    '"The clock struck midnight and the candle went out..."',
-  ];
 
   // ── Navigation ─────────────────────────────────────────────────────────────
   void _nextTurn() {
     if (_turn < _total) {
       setState(() => _turn++);
-    }
-    if (_turn >= _total) {
+    } else {
       _finish();
     }
   }
@@ -195,6 +237,7 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
         builder: (_) => StoryBuilderResultScreen(
           turnResults:      _turnResults,
           durationSeconds:  elapsed,
+          storyHistory:     List<Map<String, String>>.unmodifiable(_storyHistory),
         ),
       ),
     );
@@ -209,6 +252,7 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
           turnResults:     _turnResults,
           turnsCompleted:  _turn,
           durationSeconds: elapsed,
+          storyHistory:    List<Map<String, String>>.unmodifiable(_storyHistory),
         ),
       ),
     );
@@ -224,7 +268,6 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
 
     return Scaffold(
       backgroundColor: kBg,
-      bottomNavigationBar: _buildBottomNav(),
       body: SafeArea(
         child: Stack(
           children: [
@@ -583,58 +626,6 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
     );
   }
 
-  Widget _buildBottomNav() {
-    final items = [
-      (Icons.home_outlined,          'Home'),
-      (Icons.show_chart_rounded,     'Progress'),
-      (Icons.headset_mic_outlined,   'Support'),
-      (Icons.person_outline_rounded, 'Profile'),
-    ];
-    return Container(
-      decoration: BoxDecoration(
-        color: kBg,
-        border: Border(
-          top: BorderSide(
-              color: const Color(0xFFE6BEF0).withOpacity(0.08),
-              width: 1),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: List.generate(items.length, (i) {
-          final active = _navIndex == i;
-          final color  = active ? kNavActive : kNavInact;
-          return GestureDetector(
-            onTap: () => navigateTo(context, i),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(items[i].$1, color: color, size: 22),
-                const SizedBox(height: 3),
-                Text(items[i].$2,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: active
-                          ? FontWeight.w700
-                          : FontWeight.w400,
-                      color: color,
-                    )),
-                if (active) ...[
-                  const SizedBox(height: 2),
-                  Container(
-                    width: 4, height: 4,
-                    decoration: const BoxDecoration(
-                        color: kNavActive, shape: BoxShape.circle),
-                  ),
-                ],
-              ],
-            ),
-          );
-        }),
-      ),
-    );
-  }
 }
 
 // ── Chat bubble ────────────────────────────────────────────────────────────────

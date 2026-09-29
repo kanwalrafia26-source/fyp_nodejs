@@ -8,19 +8,30 @@ class StoryBuilderResultScreen extends StatelessWidget {
   /// Per-turn results collected during the game.
   final List<Map<String, dynamic>> turnResults;
   final int durationSeconds;
+  /// Full alternating AI + user story history. Used for the story text.
+  final List<Map<String, String>> storyHistory;
 
   const StoryBuilderResultScreen({
     super.key,
     required this.turnResults,
     required this.durationSeconds,
+    this.storyHistory = const [],
   });
 
   // ── Derived values ─────────────────────────────────────────────────────────
   bool get _hasReal =>
       turnResults.any((t) => t['hasRealData'] == true);
 
-  /// Join all real transcripts into one story paragraph.
+  /// Full story text — joins AI + user contributions from storyHistory when
+  /// available (includes AI lines), otherwise falls back to user transcripts only.
   String get _storyText {
+    if (storyHistory.isNotEmpty) {
+      return storyHistory
+          .where((e) => (e['text'] ?? '').isNotEmpty)
+          .map((e) => (e['text'] ?? '').trim())
+          .join(' ');
+    }
+    // Fallback: user transcripts only
     final parts = turnResults
         .where((t) => (t['transcript'] as String).isNotEmpty)
         .map((t) => (t['transcript'] as String).trim())

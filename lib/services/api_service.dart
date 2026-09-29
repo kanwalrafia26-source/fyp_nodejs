@@ -203,6 +203,33 @@ class ApiService {
     }
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // STORY CONTINUATION  →  POST /api/analyze/story-continuation
+  // ════════════════════════════════════════════════════════════════════════════
+  /// Asks the backend (Gemini) for a 1–2 sentence story continuation.
+  /// Returns the continuation string, or null on failure (caller handles gracefully).
+  static Future<String?> getStoryContinuation({
+    required String storySoFar,
+    required String latestUserTurn,
+    required int turnNumber,
+  }) async {
+    try {
+      final res = await _post('/analyze/story-continuation', {
+        'storySoFar':     storySoFar,
+        'latestUserTurn': latestUserTurn,
+        'turnNumber':     turnNumber,
+      });
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body) as Map<String, dynamic>;
+        return body['continuation'] as String?;
+      }
+      // Non-200 — log but don't crash the game
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Clears token on logout.
   static void clearToken() => _token = null;
 

@@ -4,6 +4,7 @@ const multer      = require('multer');
 const fs          = require('fs');
 const { spawn }   = require('child_process');
 const path        = require('path');
+const https       = require('https');
 const { buildTherapyPlan } = require('../therapyEngine');
 
 const upload = multer({
@@ -111,6 +112,91 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
     if (tmpFilePath) {
       fs.unlink(tmpFilePath, () => {});
     }
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/analyze/story-continuation
+// Body: { storySoFar: string, latestUserTurn: string, turnNumber: number }
+// Returns: { continuation: string }
+//
+// Calls Gemini 2.0 Flash (server-side) to generate a 1–2 sentence story
+// continuation that directly acknowledges the user's latest contribution.
+// API key is server-side only — never exposed to Flutter.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/story-continuation', async (req, res) => {
+  const { storySoFar, latestUserTurn, turnNumber } = req.body;
+
+  if (!storySoFar || !latestUserTurn) {
+    return res.status(400).json({ message: 'storySoFar and latestUserTurn are required.' });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey.startsWith('AIzaSyExample')) {
+    return res.status(503).json({ message: 'Gemini API key not configured.' });
+  }
+
+  const prompt =
+    `You are a creative writing collaborator helping build a short spoken story.\n` +
+    `The story so far:\n${storySoFar}\n\n` +
+    `The user just said on turn ${turnNumber}:\n"${latestUserTurn}"\n\n` +
+    `Continue the story in 1–2 sentences. ` +
+    `Directly acknowledge or build on what the user just said. ` +
+    `Preserve all characters, setting, and events established so far. ` +
+    `Do not restart the story. Do not give feedback to the user. ` +
+    `Do not mention that you are an AI. ` +
+    `Do not use quotation marks around your response. ` +
+    `Output ONLY the story continuation.`;
+
+  const requestBody = JSON.stringify({
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: {
+      maxOutputTokens: 600,
+      temperature: 0.85,
+      topP: 0.9,
+    },
+  });
+
+  const options = {
+    hostname: 'generativelanguage.googleapis.com',
+    path: `/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(requestBody),
+    },
+  };
+
+  try {
+    const continuation = await new Promise((resolve, reject) => {
+      const request = https.request(options, (response) => {
+        let data = '';
+        response.on('data', (chunk) => { data += chunk; });
+        response.on('end', () => {
+          try {
+            const parsed = JSON.parse(data);
+            const parts = parsed?.candidates?.[0]?.content?.parts || [];
+            const textObj = parts.find(p => p.text && !p.thoughtSignature) || parts[0];
+            const text = textObj?.text;
+            if (text) {
+              resolve(text.trim());
+            } else {
+              reject(new Error(`Gemini returned no text: ${data}`));
+            }
+          } catch (e) {
+            reject(new Error(`Failed to parse Gemini response: ${data}`));
+          }
+        });
+      });
+      request.on('error', reject);
+      request.write(requestBody);
+      request.end();
+    });
+
+    res.json({ continuation });
+  } catch (err) {
+    console.error('[analyze/story-continuation]', err.message);
+    res.status(500).json({ message: 'Story continuation failed.', error: err.message });
   }
 });
 

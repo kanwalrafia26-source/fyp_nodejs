@@ -6,12 +6,14 @@ class StoryBuilderFailScreen extends StatelessWidget {
   final List<Map<String, dynamic>> turnResults;
   final int turnsCompleted;
   final int durationSeconds;
+  final List<Map<String, String>> storyHistory;
 
   const StoryBuilderFailScreen({
     super.key,
     required this.turnResults,
     required this.turnsCompleted,
     required this.durationSeconds,
+    this.storyHistory = const [],
   });
 
   // ── Derived values ─────────────────────────────────────────────────────────
@@ -20,6 +22,12 @@ class StoryBuilderFailScreen extends StatelessWidget {
 
   /// Join all real transcripts — with filler markers highlighted.
   String get _storyText {
+    if (storyHistory.isNotEmpty) {
+      return storyHistory
+          .where((entry) => (entry['text'] ?? '').isNotEmpty)
+          .map((entry) => (entry['text'] ?? '').trim())
+          .join(' ');
+    }
     final parts = turnResults
         .where((t) => (t['transcript'] as String).isNotEmpty)
         .map((t) => (t['transcript'] as String).trim())

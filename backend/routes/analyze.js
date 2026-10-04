@@ -124,6 +124,55 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
 // continuation that directly acknowledges the user's latest contribution.
 // API key is server-side only — never exposed to Flutter.
 // ─────────────────────────────────────────────────────────────────────────────
+function queryGeminiModel(modelName, apiKey, prompt) {
+  return new Promise((resolve, reject) => {
+    const requestBody = JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        maxOutputTokens: 2048,
+        temperature: 0.85,
+        topP: 0.9,
+      },
+    });
+
+    const options = {
+      hostname: 'generativelanguage.googleapis.com',
+      path: `/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(requestBody),
+      },
+    };
+
+    const request = https.request(options, (response) => {
+      let data = '';
+      response.on('data', (chunk) => { data += chunk; });
+      response.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.error) {
+            return reject(new Error(parsed.error.message || `Gemini API error: ${data}`));
+          }
+          const parts = parsed?.candidates?.[0]?.content?.parts || [];
+          const textObj = parts.find(p => p.text && !p.thoughtSignature) || parts[parts.length - 1] || parts[0];
+          const text = textObj?.text;
+          if (text) {
+            resolve(text.trim());
+          } else {
+            reject(new Error(`Gemini returned no text: ${data}`));
+          }
+        } catch (e) {
+          reject(new Error(`Failed to parse Gemini response: ${data}`));
+        }
+      });
+    });
+    request.on('error', reject);
+    request.write(requestBody);
+    request.end();
+  });
+}
+
 router.post('/story-continuation', async (req, res) => {
   const { storySoFar, latestUserTurn, turnNumber } = req.body;
 
@@ -148,50 +197,14 @@ router.post('/story-continuation', async (req, res) => {
     `Do not use quotation marks around your response. ` +
     `Output ONLY the story continuation.`;
 
-  const requestBody = JSON.stringify({
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: {
-      maxOutputTokens: 600,
-      temperature: 0.85,
-      topP: 0.9,
-    },
-  });
-
-  const options = {
-    hostname: 'generativelanguage.googleapis.com',
-    path: `/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`,
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Content-Length': Buffer.byteLength(requestBody),
-    },
-  };
-
   try {
-    const continuation = await new Promise((resolve, reject) => {
-      const request = https.request(options, (response) => {
-        let data = '';
-        response.on('data', (chunk) => { data += chunk; });
-        response.on('end', () => {
-          try {
-            const parsed = JSON.parse(data);
-            const parts = parsed?.candidates?.[0]?.content?.parts || [];
-            const textObj = parts.find(p => p.text && !p.thoughtSignature) || parts[0];
-            const text = textObj?.text;
-            if (text) {
-              resolve(text.trim());
-            } else {
-              reject(new Error(`Gemini returned no text: ${data}`));
-            }
-          } catch (e) {
-            reject(new Error(`Failed to parse Gemini response: ${data}`));
-          }
-        });
-      });
-      request.on('error', reject);
-      request.write(requestBody);
-      request.end();
-    });
+    let continuation;
+    try {
+      continuation = await queryGeminiModel('gemini-3.8-flash', apiKey, prompt);
+    } catch (primaryErr) {
+      console.warn('[analyze/story-continuation] Primary model busy, using fallback model:', primaryErr.message);
+      continuation = await queryGeminiModel('gemini-flash-latest', apiKey, prompt);
+    }
 
     res.json({ continuation });
   } catch (err) {

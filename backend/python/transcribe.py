@@ -224,6 +224,16 @@ def main():
     )
 
     segments = list(segments)
+    if not segments:
+        # Fallback without VAD filter in case VAD filtered out soft speech or short clips
+        segments, info = model.transcribe(
+            audio_path,
+            beam_size=5,
+            word_timestamps=True,
+            vad_filter=False,
+            condition_on_previous_text=False,
+        )
+        segments = list(segments)
     full_text = " ".join(s.text.strip() for s in segments).strip()
 
     words = []

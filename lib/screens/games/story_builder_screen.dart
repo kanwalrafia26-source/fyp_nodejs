@@ -62,6 +62,8 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
   static const Color kPromptBg  = Color(0x1AD9E366);
   static const Color kGreen     = Color(0xFF90D070);
 
+  final TextEditingController _textController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -88,6 +90,7 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
     _waveCtrl.dispose();
     _pulseCtrl.dispose();
     _countdown?.cancel();
+    _textController.dispose();
     if (_recording) _recorder.stop();
     _recorder.dispose();
     super.dispose();
@@ -126,8 +129,8 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
     try {
       final dir = await getApplicationDocumentsDirectory();
       final path =
-          '${dir.path}/sb_t${_turn}_${DateTime.now().millisecondsSinceEpoch}.m4a';
-      await _recorder.start(const RecordConfig(), path: path);
+          '${dir.path}/sb_t${_turn}_${DateTime.now().millisecondsSinceEpoch}.wav';
+      await _recorder.start(const RecordConfig(encoder: AudioEncoder.wav), path: path);
       return true;
     } catch (_) {
       return false;
@@ -218,6 +221,14 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
         _isAnalyzing = false;
       });
     }
+  }
+
+  void _submitTextTurn() {
+    final text = _textController.text.trim();
+    if (text.isEmpty || _isAnalyzing) return;
+    _textController.clear();
+    FocusScope.of(context).unfocus();
+    _analyseCurrentTurn(manualText: text);
   }
 
   // ── Navigation ─────────────────────────────────────────────────────────────
@@ -380,7 +391,54 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
                           ),
                         ),
 
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 14),
+
+                        // ── Optional text input for typing turns ───────
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _textController,
+                                  enabled: !_recording && !_isAnalyzing,
+                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                                  decoration: InputDecoration(
+                                    hintText: 'Or type your turn here...',
+                                    hintStyle: TextStyle(
+                                      color: kSubtitle.withOpacity(0.7),
+                                      fontSize: 12,
+                                    ),
+                                    filled: true,
+                                    fillColor: Colors.white.withOpacity(0.06),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 10),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(
+                                          color: kYellow.withOpacity(0.2)),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(
+                                          color: kYellow.withOpacity(0.2)),
+                                    ),
+                                  ),
+                                  onSubmitted: (_) => _submitTextTurn(),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                onPressed: (_recording || _isAnalyzing)
+                                    ? null
+                                    : _submitTextTurn,
+                                icon: const Icon(Icons.send_rounded, color: kYellow),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
 
                         // ── Last turn stats ─────────────────────────────
                         Container(

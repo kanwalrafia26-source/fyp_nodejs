@@ -218,6 +218,9 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
 
     if (mounted) {
       setState(() {
+        if (_turn < _total) {
+          _turn++;
+        }
         _isAnalyzing = false;
       });
     }
@@ -232,13 +235,6 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
   }
 
   // ── Navigation ─────────────────────────────────────────────────────────────
-  void _nextTurn() {
-    if (_turn < _total) {
-      setState(() => _turn++);
-    } else {
-      _finish();
-    }
-  }
 
   void _finish() {
     final elapsed = DateTime.now().difference(_sessionStart).inSeconds;
@@ -338,7 +334,7 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
                           onTap: _toggleRecording,
                           child: AnimatedBuilder(
                             animation: _pulseCtrl,
-                            builder: (_, __) {
+                            builder: (context, child) {
                               final scale = _recording
                                   ? 1.0 + 0.06 * sin(_pulseCtrl.value * pi)
                                   : 1.0;
@@ -533,7 +529,7 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
                               ),
                             ),
                             const SizedBox(width: 10),
-                            Expanded(
+                             Expanded(
                               flex: 2,
                               child: SizedBox(
                                 height: 48,
@@ -541,7 +537,7 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
                                   onPressed:
                                       (_recording || _isAnalyzing)
                                           ? null
-                                          : _nextTurn,
+                                          : _finish,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: kYellow,
                                     foregroundColor: kYellowDk,
@@ -551,9 +547,9 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
                                             BorderRadius.circular(14)),
                                   ),
                                   child: Text(
-                                    _turn >= _total
-                                        ? 'Finish  ✓'
-                                        : 'Next turn →',
+                                    _turnResults.length >= _total
+                                        ? 'Finish & View Report  ✓'
+                                        : 'Finish Story  ✓',
                                     style: const TextStyle(
                                         fontSize: 13,
                                         fontWeight: FontWeight.w700),

@@ -28,22 +28,15 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
   final DateTime _sessionStart = DateTime.now();
 
   // ── Per-turn results — appended, never overwritten ─────────────────────────
-  // Each entry: { turn, transcript, fluencyScore, fillerWordCount,
-  //              paceStability, wpm, hasRealData }
   final List<Map<String, dynamic>> _turnResults = [];
 
   // Chat messages built from real transcripts: (isAI, text)
-  // AI lines are fixed openers; user lines come from real transcripts.
-  final List<(bool, String)> _chatMessages = [
-    (true, '"It was a stormy night when the lighthouse flickered..."'),
-  ];
+  final List<(bool, String)> _chatMessages = [];
 
   // Story history — preserves BOTH AI and user contributions in order.
-  // This is the source of truth for the full story on the result screen.
-  // Each entry: { speaker: "AI" | "You", text: string }
-  final List<Map<String, String>> _storyHistory = [
-    {'speaker': 'AI', 'text': 'It was a stormy night when the lighthouse flickered...'},
-  ];
+  final List<Map<String, String>> _storyHistory = [];
+
+  bool _loadingOpening = true;
 
   // ── Real audio ─────────────────────────────────────────────────────────────
   final AudioRecorder _recorder = AudioRecorder();
@@ -76,6 +69,32 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
       duration: const Duration(milliseconds: 1200),
     )..repeat(reverse: true);
     _checkPermission();
+    _initNewGame();
+  }
+
+  Future<void> _initNewGame() async {
+    if (mounted) {
+      setState(() {
+        _turn = 1;
+        _turnResults.clear();
+        _storyHistory.clear();
+        _chatMessages.clear();
+        _loadingOpening = true;
+      });
+    }
+
+    final opening = await ApiService.getStoryOpening();
+    final text = (opening != null && opening.isNotEmpty)
+        ? opening
+        : 'The old train stopped suddenly in the middle of the forest.';
+
+    if (mounted) {
+      setState(() {
+        _chatMessages.add((true, '"$text"'));
+        _storyHistory.add({'speaker': 'AI', 'text': text});
+        _loadingOpening = false;
+      });
+    }
   }
 
   Future<void> _checkPermission() async {
@@ -167,14 +186,17 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
       } catch (_) {}
     }
 
-    // If transcript is still empty (e.g. mic didn't catch speech), show fallback info
+    // If transcript is still empty (e.g. mic didn't catch speech), prompt user to try again
     if (transcript.isEmpty) {
-      final bubbleText = '(no speech detected on turn $_turn — tap the mic or type below)';
       if (mounted) {
-        setState(() {
-          _chatMessages.add((false, bubbleText));
-          _isAnalyzing = false;
-        });
+        setState(() => _isAnalyzing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No speech detected. Please tap the mic or type to try again.'),
+            backgroundColor: Color(0xFF5300AC),
+            duration: Duration(seconds: 3),
+          ),
+        );
       }
       return;
     }
@@ -211,6 +233,7 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
       _storyHistory.add({'speaker': 'AI', 'text': continuation});
     } else {
       // Graceful fallback if Gemini endpoint unavailable
+      debugPrint('[StoryBuilder] Showing AI unavailable fallback for turn $_turn');
       _chatMessages.add(
         (true, '(AI continuation unavailable — continue the story your way...)'),
       );
@@ -223,6 +246,9 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
         }
         _isAnalyzing = false;
       });
+      if (_turnResults.length >= _total) {
+        _finish();
+      }
     }
   }
 
@@ -238,16 +264,47 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
 
   void _finish() {
     final elapsed = DateTime.now().difference(_sessionStart).inSeconds;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => StoryBuilderResultScreen(
-          turnResults:      _turnResults,
-          durationSeconds:  elapsed,
-          storyHistory:     List<Map<String, String>>.unmodifiable(_storyHistory),
+
+    final validScores = _turnResults
+        .where((t) => t['hasRealData'] == true)
+        .map((t) => t['fluencyScore'] as int)
+        .toList();
+    final avgFluency = validScores.isNotEmpty
+        ? (validScores.reduce((a, b) => a + b) ~/ validScores.length)
+        : 80;
+
+    // Save session to backend
+    ApiService.saveSession({
+      'sessionType': 'story_builder',
+      'durationSeconds': elapsed,
+      'fluencyScore': avgFluency,
+      'turnResults': _turnResults,
+    });
+
+    if (avgFluency >= 60 || _turnResults.isEmpty) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => StoryBuilderResultScreen(
+            turnResults:      _turnResults,
+            durationSeconds:  elapsed,
+            storyHistory:     List<Map<String, String>>.unmodifiable(_storyHistory),
+          ),
         ),
-      ),
-    );
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => StoryBuilderFailScreen(
+            turnResults:     _turnResults,
+            turnsCompleted:  _turnResults.length,
+            durationSeconds: elapsed,
+            storyHistory:    List<Map<String, String>>.unmodifiable(_storyHistory),
+          ),
+        ),
+      );
+    }
   }
 
   void _giveUp() {
@@ -535,7 +592,7 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
                                 height: 48,
                                 child: ElevatedButton(
                                   onPressed:
-                                      (_recording || _isAnalyzing)
+                                      (_recording || _isAnalyzing || !_turnResults.any((r) => r['turn'] == _turn))
                                           ? null
                                           : _finish,
                                   style: ElevatedButton.styleFrom(
@@ -567,6 +624,26 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
                 ),
               ],
             ),
+
+            // ── Loading opening overlay ──────────────────────────────────
+            if (_loadingOpening)
+              Container(
+                color: kBg,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      CircularProgressIndicator(color: kYellow),
+                      SizedBox(height: 16),
+                      Text('Generating new story opening...',
+                          style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white)),
+                    ],
+                  ),
+                ),
+              ),
 
             // ── Analysing overlay ─────────────────────────────────────
             if (_isAnalyzing)

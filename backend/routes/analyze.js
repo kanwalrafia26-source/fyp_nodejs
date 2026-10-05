@@ -152,17 +152,20 @@ function queryGeminiModel(modelName, apiKey, prompt) {
         try {
           const parsed = JSON.parse(data);
           if (parsed.error) {
-            return reject(new Error(parsed.error.message || `Gemini API error: ${data}`));
+            const msg = parsed.error.message || 'unknown Gemini error';
+            console.error(`[queryGeminiModel] ${modelName} HTTP ${response.statusCode} – ${msg}`);
+            return reject(new Error(`Gemini ${response.statusCode} (${modelName}): ${msg}`));
           }
           const parts = parsed?.candidates?.[0]?.content?.parts || [];
-          const textObj = parts.find(p => p.text && !p.thoughtSignature) || parts[parts.length - 1] || parts[0];
-          const text = textObj?.text;
+          const text = parts.filter(p => !p.thought).map(p => p.text || '').join(' ').trim();
           if (text) {
-            resolve(text.trim());
+            resolve(text);
           } else {
+            console.error(`[queryGeminiModel] ${modelName} returned no text (HTTP ${response.statusCode}):`, data.substring(0, 200));
             reject(new Error(`Gemini returned no text: ${data}`));
           }
         } catch (e) {
+          console.error(`[queryGeminiModel] Failed to parse response from ${modelName} (HTTP ${response.statusCode}):`, data.substring(0, 200));
           reject(new Error(`Failed to parse Gemini response: ${data}`));
         }
       });
@@ -173,6 +176,61 @@ function queryGeminiModel(modelName, apiKey, prompt) {
   });
 }
 
+async function queryGeminiWithFallbacks(apiKey, prompt) {
+  const models = [
+    'gemini-3.5-flash',
+    'gemini-flash-lite-latest',
+    'gemini-3.8-flash',
+    'gemini-flash-latest'
+  ];
+  let lastError;
+  for (const model of models) {
+    try {
+      const res = await queryGeminiModel(model, apiKey, prompt);
+      return res;
+    } catch (err) {
+      lastError = err;
+      console.warn(`[queryGeminiWithFallbacks] Model ${model} failed: ${err.message}`);
+    }
+  }
+  throw lastError || new Error('All Gemini model fallbacks failed');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/analyze/story-opening
+// Returns: { opening: string }
+//
+// Generates a fresh, unique 1–2 sentence story opening for a new game session.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/story-opening', async (req, res) => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey.startsWith('AIzaSyExample')) {
+    return res.status(503).json({ message: 'Gemini API key not configured.' });
+  }
+
+  const prompt =
+    `Generate a fresh, unique, and creative 1–2 sentence story opening for an interactive speaking game.\n` +
+    `Requirements:\n` +
+    `- Must be engaging, imaginative, and easy for a student to continue.\n` +
+    `- Must NOT be a question to the user.\n` +
+    `- Must NOT include quotation marks around the output.\n` +
+    `- Must NOT reuse common cliches like "It was a dark and stormy night".\n` +
+    `- Output ONLY the 1–2 sentence story opening.`;
+
+  try {
+    const opening = await queryGeminiWithFallbacks(apiKey, prompt);
+    res.json({ opening });
+  } catch (err) {
+    console.error('[analyze/story-opening] All models failed:', err.message);
+    res.status(500).json({ message: 'Failed to generate story opening.', error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/analyze/story-continuation
+// Body: { storySoFar: string, latestUserTurn: string, turnNumber: number }
+// Returns: { continuation: string }
+// ─────────────────────────────────────────────────────────────────────────────
 router.post('/story-continuation', async (req, res) => {
   const { storySoFar, latestUserTurn, turnNumber } = req.body;
 
@@ -198,17 +256,10 @@ router.post('/story-continuation', async (req, res) => {
     `Output ONLY the story continuation.`;
 
   try {
-    let continuation;
-    try {
-      continuation = await queryGeminiModel('gemini-3.8-flash', apiKey, prompt);
-    } catch (primaryErr) {
-      console.warn('[analyze/story-continuation] Primary model busy, using fallback model:', primaryErr.message);
-      continuation = await queryGeminiModel('gemini-flash-latest', apiKey, prompt);
-    }
-
+    const continuation = await queryGeminiWithFallbacks(apiKey, prompt);
     res.json({ continuation });
   } catch (err) {
-    console.error('[analyze/story-continuation]', err.message);
+    console.error('[analyze/story-continuation] All models failed:', err.message);
     res.status(500).json({ message: 'Story continuation failed.', error: err.message });
   }
 });

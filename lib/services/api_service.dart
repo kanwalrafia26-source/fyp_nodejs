@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:http/http.dart' as http;
 
 /// Flutter ↔ Node.js backend bridge.
@@ -204,10 +205,30 @@ class ApiService {
   }
 
   // ════════════════════════════════════════════════════════════════════════════
+  // STORY OPENING  →  POST /api/analyze/story-opening
+  // ════════════════════════════════════════════════════════════════════════════
+  /// Asks the backend (Gemini) for a fresh, unique story opening.
+  static Future<String?> getStoryOpening() async {
+    try {
+      final res = await _post('/analyze/story-opening', {});
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body) as Map<String, dynamic>;
+        return body['opening'] as String?;
+      }
+      debugPrint('[StoryBuilder] story-opening HTTP ${res.statusCode}');
+      return null;
+    } catch (e) {
+      debugPrint('[StoryBuilder] story-opening network error: $e');
+      return null;
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
   // STORY CONTINUATION  →  POST /api/analyze/story-continuation
   // ════════════════════════════════════════════════════════════════════════════
   /// Asks the backend (Gemini) for a 1–2 sentence story continuation.
   /// Returns the continuation string, or null on failure (caller handles gracefully).
+  /// Logs the HTTP status and error reason on failure so failures are diagnosable.
   static Future<String?> getStoryContinuation({
     required String storySoFar,
     required String latestUserTurn,
@@ -223,9 +244,20 @@ class ApiService {
         final body = jsonDecode(res.body) as Map<String, dynamic>;
         return body['continuation'] as String?;
       }
-      // Non-200 — log but don't crash the game
+      // Non-200: log the status and reason so failures are diagnosable
+      String reason = 'unknown';
+      try {
+        final body = jsonDecode(res.body) as Map<String, dynamic>;
+        reason = body['error'] as String? ?? body['message'] as String? ?? reason;
+      } catch (_) {}
+      if (res.statusCode == 429) {
+        debugPrint('[StoryBuilder] Gemini 429 quota/rate-limit: $reason');
+      } else {
+        debugPrint('[StoryBuilder] story-continuation HTTP ${res.statusCode}: $reason');
+      }
       return null;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[StoryBuilder] story-continuation network/connection error: $e');
       return null;
     }
   }

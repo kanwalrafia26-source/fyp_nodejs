@@ -11,7 +11,7 @@ class ApiService {
   // Windows desktop  → localhost
   // Android emulator → 10.0.2.2
   // Real device      → PC LAN IP (Wi-Fi)
-  static const String baseUrl = 'http://192.168.100.183:5000/api';
+  static const String baseUrl = 'http://localhost:5000/api';
 
   // JWT token stored here after login
   static String? _token;

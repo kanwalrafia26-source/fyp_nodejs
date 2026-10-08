@@ -18,7 +18,7 @@ class StoryBuilderFailScreen extends StatelessWidget {
 
   // ── Derived values ─────────────────────────────────────────────────────────
   bool get _hasReal =>
-      turnResults.any((t) => t['hasRealData'] == true);
+      turnResults.any((t) => t['hasRealData'] == true && t['isTyped'] != true && t['fluencyScore'] != null);
 
   /// Join all real transcripts — with filler markers highlighted.
   String get _storyText {
@@ -36,25 +36,26 @@ class StoryBuilderFailScreen extends StatelessWidget {
     return parts.join(' ');
   }
 
-  /// Average fluency across completed turns with real data.
+  /// Average fluency across completed turns with real audio data.
   int get _avgFluency {
     final scores = turnResults
-        .where((t) => t['hasRealData'] == true)
+        .where((t) => t['hasRealData'] == true && t['isTyped'] != true && t['fluencyScore'] != null)
         .map((t) => t['fluencyScore'] as int)
         .toList();
     if (scores.isEmpty) return 0;
     return scores.reduce((a, b) => a + b) ~/ scores.length;
   }
 
-  /// Total filler words.
+  /// Total filler words across audio turns.
   int get _totalFillers => turnResults
+      .where((t) => t['hasRealData'] == true && t['isTyped'] != true && t['fillerWordCount'] != null)
       .map((t) => t['fillerWordCount'] as int)
       .fold(0, (a, b) => a + b);
 
   /// Turns where fluency < 60 — shown in "Where fluency dropped" section.
   List<Map<String, dynamic>> get _weakTurns => turnResults
       .where((t) =>
-          t['hasRealData'] == true && (t['fluencyScore'] as int) < 60)
+          t['hasRealData'] == true && t['isTyped'] != true && t['fluencyScore'] != null && (t['fluencyScore'] as int) < 60)
       .toList();
 
   // ── Colours ────────────────────────────────────────────────────────────────

@@ -176,6 +176,35 @@ function queryGeminiModel(modelName, apiKey, prompt) {
   });
 }
 
+const { requireAuth } = require('../middleware/authMiddleware');
+
+// In-memory sliding window rate limiter for Gemini endpoints (15 requests/min)
+const geminiRateLimitMap = new Map();
+
+function geminiRateLimiter(req, res, next) {
+  const key = (req.user && req.user.id) ? req.user.id : req.ip;
+  const now = Date.now();
+  const windowMs = 60 * 1000; // 1 minute
+  const maxRequests = 15; // 15 requests per minute
+
+  const userRecord = geminiRateLimitMap.get(key) || { count: 0, resetTime: now + windowMs };
+
+  if (now > userRecord.resetTime) {
+    userRecord.count = 1;
+    userRecord.resetTime = now + windowMs;
+  } else {
+    userRecord.count += 1;
+  }
+
+  geminiRateLimitMap.set(key, userRecord);
+
+  if (userRecord.count > maxRequests) {
+    return res.status(429).json({ message: 'Too many requests. Please wait a moment before trying again.' });
+  }
+
+  next();
+}
+
 async function queryGeminiWithFallbacks(apiKey, prompt) {
   const models = [
     'gemini-3.5-flash',
@@ -198,14 +227,13 @@ async function queryGeminiWithFallbacks(apiKey, prompt) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/analyze/story-opening
+// Header: Authorization: Bearer <token>
 // Returns: { opening: string }
-//
-// Generates a fresh, unique 1–2 sentence story opening for a new game session.
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/story-opening', async (req, res) => {
+router.post('/story-opening', requireAuth, geminiRateLimiter, async (req, res) => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || apiKey.startsWith('AIzaSyExample')) {
-    return res.status(503).json({ message: 'Gemini API key not configured.' });
+    return res.status(503).json({ message: 'Gemini API service is temporarily unavailable.' });
   }
 
   const prompt =
@@ -222,31 +250,51 @@ router.post('/story-opening', async (req, res) => {
     res.json({ opening });
   } catch (err) {
     console.error('[analyze/story-opening] All models failed:', err.message);
-    res.status(500).json({ message: 'Failed to generate story opening.', error: err.message });
+    res.status(503).json({ message: 'AI story service is temporarily unavailable. Please try again.' });
   }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/analyze/story-continuation
+// Header: Authorization: Bearer <token>
 // Body: { storySoFar: string, latestUserTurn: string, turnNumber: number }
 // Returns: { continuation: string }
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/story-continuation', async (req, res) => {
+router.post('/story-continuation', requireAuth, geminiRateLimiter, async (req, res) => {
   const { storySoFar, latestUserTurn, turnNumber } = req.body;
 
-  if (!storySoFar || !latestUserTurn) {
-    return res.status(400).json({ message: 'storySoFar and latestUserTurn are required.' });
+  if (typeof storySoFar !== 'string' || typeof latestUserTurn !== 'string') {
+    return res.status(400).json({ message: 'storySoFar and latestUserTurn must be non-empty strings.' });
+  }
+
+  const trimmedStory = storySoFar.trim();
+  const trimmedTurn = latestUserTurn.trim();
+
+  if (!trimmedStory || !trimmedTurn) {
+    return res.status(400).json({ message: 'storySoFar and latestUserTurn cannot be empty.' });
+  }
+
+  if (trimmedStory.length > 3000) {
+    return res.status(400).json({ message: 'storySoFar exceeds maximum length limit of 3000 characters.' });
+  }
+
+  if (trimmedTurn.length > 500) {
+    return res.status(400).json({ message: 'latestUserTurn exceeds maximum length limit of 500 characters.' });
+  }
+
+  if (turnNumber !== undefined && (typeof turnNumber !== 'number' || turnNumber < 1 || turnNumber > 50)) {
+    return res.status(400).json({ message: 'turnNumber must be a valid number between 1 and 50.' });
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || apiKey.startsWith('AIzaSyExample')) {
-    return res.status(503).json({ message: 'Gemini API key not configured.' });
+    return res.status(503).json({ message: 'Gemini API service is temporarily unavailable.' });
   }
 
   const prompt =
     `You are a creative writing collaborator helping build a short spoken story.\n` +
-    `The story so far:\n${storySoFar}\n\n` +
-    `The user just said on turn ${turnNumber}:\n"${latestUserTurn}"\n\n` +
+    `The story so far:\n${trimmedStory}\n\n` +
+    `The user just said on turn ${turnNumber || 1}:\n"${trimmedTurn}"\n\n` +
     `Continue the story in 1–2 sentences. ` +
     `Directly acknowledge or build on what the user just said. ` +
     `Preserve all characters, setting, and events established so far. ` +
@@ -260,7 +308,7 @@ router.post('/story-continuation', async (req, res) => {
     res.json({ continuation });
   } catch (err) {
     console.error('[analyze/story-continuation] All models failed:', err.message);
-    res.status(500).json({ message: 'Story continuation failed.', error: err.message });
+    res.status(503).json({ message: 'AI story service is temporarily unavailable. Please try again.' });
   }
 });
 

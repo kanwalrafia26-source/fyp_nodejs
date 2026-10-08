@@ -210,7 +210,7 @@ class ApiService {
   /// Asks the backend (Gemini) for a fresh, unique story opening.
   static Future<String?> getStoryOpening() async {
     try {
-      final res = await _post('/analyze/story-opening', {});
+      final res = await _post('/analyze/story-opening', {}, withAuth: true);
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body) as Map<String, dynamic>;
         return body['opening'] as String?;
@@ -235,11 +235,15 @@ class ApiService {
     required int turnNumber,
   }) async {
     try {
-      final res = await _post('/analyze/story-continuation', {
-        'storySoFar':     storySoFar,
-        'latestUserTurn': latestUserTurn,
-        'turnNumber':     turnNumber,
-      });
+      final res = await _post(
+        '/analyze/story-continuation',
+        {
+          'storySoFar':     storySoFar,
+          'latestUserTurn': latestUserTurn,
+          'turnNumber':     turnNumber,
+        },
+        withAuth: true,
+      );
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body) as Map<String, dynamic>;
         return body['continuation'] as String?;

@@ -19,8 +19,15 @@ class StoryBuilderResultScreen extends StatelessWidget {
   });
 
   // ── Derived values ─────────────────────────────────────────────────────────
+  // ── Derived values ─────────────────────────────────────────────────────────
   bool get _hasReal =>
-      turnResults.any((t) => t['hasRealData'] == true);
+      turnResults.any((t) => t['hasRealData'] == true && t['isTyped'] != true && t['fluencyScore'] != null);
+
+  int get _audioTurnCount =>
+      turnResults.where((t) => t['hasRealData'] == true && t['isTyped'] != true && t['fluencyScore'] != null).length;
+
+  int get _typedTurnCount =>
+      turnResults.where((t) => t['isTyped'] == true).length;
 
   /// Full story text — joins AI + user contributions from storyHistory when
   /// available (includes AI lines), otherwise falls back to user transcripts only.
@@ -40,28 +47,32 @@ class StoryBuilderResultScreen extends StatelessWidget {
     return parts.join(' ');
   }
 
-  /// Average fluency score across turns that have real data.
+  /// Average fluency score across turns that have real audio speech data.
   int get _avgFluency {
     final scores = turnResults
-        .where((t) => t['hasRealData'] == true)
+        .where((t) => t['hasRealData'] == true && t['isTyped'] != true && t['fluencyScore'] != null)
         .map((t) => t['fluencyScore'] as int)
         .toList();
     if (scores.isEmpty) return 0;
     return scores.reduce((a, b) => a + b) ~/ scores.length;
   }
 
-  /// Total filler words across all turns.
+  /// Total filler words across real audio turns.
   int get _totalFillers => turnResults
+      .where((t) => t['hasRealData'] == true && t['isTyped'] != true && t['fillerWordCount'] != null)
       .map((t) => t['fillerWordCount'] as int)
       .fold(0, (a, b) => a + b);
 
-  /// Most common pace stability label.
+  /// Most common pace stability label across real audio turns.
   String get _overallPacing {
-    final stables = turnResults
+    final audioTurns = turnResults
+        .where((t) => t['hasRealData'] == true && t['isTyped'] != true && t['paceStability'] != null)
+        .toList();
+    if (audioTurns.isEmpty) return '—';
+    final stables = audioTurns
         .where((t) => t['paceStability'] == 'Stable')
         .length;
-    if (turnResults.isEmpty) return '—';
-    return stables >= turnResults.length / 2 ? 'Stable' : 'Uneven';
+    return stables >= audioTurns.length / 2 ? 'Stable' : 'Uneven';
   }
 
   /// XP: turns × 15 + avgFluency × 2 (not a tuned economy — just honest).
@@ -152,7 +163,7 @@ class StoryBuilderResultScreen extends StatelessWidget {
                   _StatCard(
                     label: 'Avg Fluency',
                     value: _hasReal ? '$_avgFluency%' : '—',
-                    sub: 'Score',
+                    sub: _hasReal ? 'Audio' : 'Typed',
                     valueColor: kGreen,
                     subColor: kGreen,
                     bgColor: const Color(0xFFF0FFF4),
@@ -161,7 +172,7 @@ class StoryBuilderResultScreen extends StatelessWidget {
                   _StatCard(
                     label: 'Pacing',
                     value: _hasReal ? _overallPacing : '—',
-                    sub: 'Overall',
+                    sub: _hasReal ? 'Overall' : 'Typed',
                     valueColor: kOrange,
                     subColor: kOrange,
                     bgColor: const Color(0xFFFFF8F0),
@@ -170,7 +181,7 @@ class StoryBuilderResultScreen extends StatelessWidget {
                   _StatCard(
                     label: 'Filler words',
                     value: _hasReal ? '$_totalFillers' : '—',
-                    sub: 'Total',
+                    sub: _hasReal ? 'Total' : 'Typed',
                     valueColor: kPurple,
                     subColor: kPurple,
                     bgColor: const Color(0xFFF0E8FF),
@@ -204,10 +215,11 @@ class StoryBuilderResultScreen extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       _hasReal
-                          ? '"Avg fluency $_avgFluency% across ${turnResults.length} turns'
+                          ? '"Avg fluency $_avgFluency% across $_audioTurnCount spoken turn${_audioTurnCount == 1 ? '' : 's'}'
+                              '${_typedTurnCount > 0 ? ' ($_typedTurnCount typed)' : ''}'
                               ' · $_totalFillers filler word${_totalFillers == 1 ? '' : 's'}'
                               ' · Pacing: $_overallPacing. Keep the narrative flowing!"'
-                          : '"Complete turns with your mic on for real AI insights."',
+                          : '"Played using typed turns ($_typedTurnCount typed turn${_typedTurnCount == 1 ? '' : 's'}). Use the mic during gameplay for real speech analysis!"',
                       style: const TextStyle(
                           fontSize: 11,
                           color: Colors.white,

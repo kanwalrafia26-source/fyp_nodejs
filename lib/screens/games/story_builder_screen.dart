@@ -84,6 +84,15 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
     }
 
     final opening = await ApiService.getStoryOpening();
+    if (ApiService.token == null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please log in to your Speakora account for live AI story generation.'),
+          backgroundColor: Color(0xFF5300AC),
+          duration: Duration(seconds: 4),
+        ),
+      );
+    }
     final text = (opening != null && opening.isNotEmpty)
         ? opening
         : 'The old train stopped suddenly in the middle of the forest.';
@@ -202,14 +211,16 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
     }
 
     // ── Save turn result ──────────────────────────────────────────────────────
+    final isTypedTurn = manualText != null;
     _turnResults.add({
       'turn':            _turn,
       'transcript':      transcript,
-      'fluencyScore':    (result?['fluencyScore']    as num?)?.toInt() ?? 80,
-      'fillerWordCount': (result?['fillerWordCount']  as num?)?.toInt() ?? 0,
-      'paceStability':   result?['paceStability']    as String? ?? 'Stable',
-      'wpm':             (result?['wpm']             as num?)?.toInt() ?? 120,
-      'hasRealData':     result != null || manualText != null,
+      'isTyped':         isTypedTurn,
+      'hasRealData':     !isTypedTurn && result != null,
+      'fluencyScore':    !isTypedTurn ? ((result?['fluencyScore'] as num?)?.toInt() ?? 80) : null,
+      'fillerWordCount': !isTypedTurn ? ((result?['fillerWordCount'] as num?)?.toInt() ?? 0) : null,
+      'paceStability':   !isTypedTurn ? (result?['paceStability'] as String? ?? 'Stable') : null,
+      'wpm':             !isTypedTurn ? ((result?['wpm'] as num?)?.toInt() ?? 120) : null,
     });
 
     // ── Add user contribution to chat and story history ───────────────────────
@@ -265,13 +276,14 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
   void _finish() {
     final elapsed = DateTime.now().difference(_sessionStart).inSeconds;
 
-    final validScores = _turnResults
-        .where((t) => t['hasRealData'] == true)
-        .map((t) => t['fluencyScore'] as int)
+    // Exclude typed turns from speech metrics calculation
+    final audioTurns = _turnResults
+        .where((t) => t['hasRealData'] == true && t['isTyped'] != true && t['fluencyScore'] != null)
         .toList();
-    final avgFluency = validScores.isNotEmpty
-        ? (validScores.reduce((a, b) => a + b) ~/ validScores.length)
-        : 80;
+    final audioScores = audioTurns.map((t) => t['fluencyScore'] as int).toList();
+    final avgFluency = audioScores.isNotEmpty
+        ? (audioScores.reduce((a, b) => a + b) ~/ audioScores.length)
+        : null;
 
     // Save session to backend
     ApiService.saveSession({
@@ -281,7 +293,7 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
       'turnResults': _turnResults,
     });
 
-    if (avgFluency >= 60 || _turnResults.isEmpty) {
+    if (avgFluency == null || avgFluency >= 60 || _turnResults.isEmpty) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -509,7 +521,9 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
                             children: [
                               Text(
                                 _lastResult != null
-                                    ? 'TURN ${_lastResult!['turn']} RESULT'
+                                    ? (_lastResult!['isTyped'] == true
+                                        ? 'TURN ${_lastResult!['turn']} RESULT (TYPED)'
+                                        : 'TURN ${_lastResult!['turn']} RESULT (AUDIO)')
                                     : 'LAST SENTENCE',
                                 style: const TextStyle(
                                   fontSize: 10,
@@ -522,9 +536,12 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
                               Row(
                                 children: [
                                   _StatBox(
-                                    value: _lastResult != null &&
-                                            _lastResult!['hasRealData'] == true
-                                        ? '${_lastResult!['fluencyScore']}%'
+                                    value: _lastResult != null
+                                        ? (_lastResult!['isTyped'] == true
+                                            ? 'Typed'
+                                            : (_lastResult!['hasRealData'] == true
+                                                ? '${_lastResult!['fluencyScore']}%'
+                                                : '—'))
                                         : '—',
                                     label: 'Fluency',
                                     valueColor: const Color(0xFFE6BEF0),
@@ -532,9 +549,12 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
                                   ),
                                   const SizedBox(width: 10),
                                   _StatBox(
-                                    value: _lastResult != null &&
-                                            _lastResult!['hasRealData'] == true
-                                        ? (_lastResult!['paceStability'] ?? '—')
+                                    value: _lastResult != null
+                                        ? (_lastResult!['isTyped'] == true
+                                            ? 'Typed'
+                                            : (_lastResult!['hasRealData'] == true
+                                                ? (_lastResult!['paceStability'] ?? '—')
+                                                : '—'))
                                         : '—',
                                     label: 'Pacing',
                                     valueColor: kGreen,
@@ -543,9 +563,12 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
                                   ),
                                   const SizedBox(width: 10),
                                   _StatBox(
-                                    value: _lastResult != null &&
-                                            _lastResult!['hasRealData'] == true
-                                        ? '${_lastResult!['fillerWordCount']}'
+                                    value: _lastResult != null
+                                        ? (_lastResult!['isTyped'] == true
+                                            ? 'Typed'
+                                            : (_lastResult!['hasRealData'] == true
+                                                ? '${_lastResult!['fillerWordCount']}'
+                                                : '—'))
                                         : '—',
                                     label: 'Fillers',
                                     valueColor: kGreen,

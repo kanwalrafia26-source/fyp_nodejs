@@ -592,7 +592,7 @@ class _StoryBuilderScreenState extends State<StoryBuilderScreen>
                                 height: 48,
                                 child: ElevatedButton(
                                   onPressed:
-                                      (_recording || _isAnalyzing || !_turnResults.any((r) => r['turn'] == _turn))
+                                      (_recording || _isAnalyzing || _loadingOpening || _turnResults.isEmpty)
                                           ? null
                                           : _finish,
                                   style: ElevatedButton.styleFrom(
